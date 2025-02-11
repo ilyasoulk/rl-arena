@@ -1,0 +1,10 @@
+[project]
+name = "rl-arena"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "gymnasium[classic-control]>=1.0.0",
+    "stable-baselines3>=2.5.0",
+]
