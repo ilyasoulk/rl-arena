@@ -1,31 +1,9 @@
+import torch
+import argparse
 import gymnasium as gym
-from collections import deque
-import random
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
-
-
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.buffer = deque(maxlen=capacity)
-
-    def add(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, 1 if done else 0))
-
-    def sample(self, batch_size):
-        batch = random.sample(self.buffer, batch_size)
-        states, actions, rewards, next_states, dones = list(zip(*batch))
-        states = torch.tensor(states)
-        actions = torch.tensor(actions).unsqueeze(dim=1)
-        rewards = torch.tensor(rewards).unsqueeze(dim=1)
-        next_states = torch.tensor(next_states)
-        dones = torch.tensor(dones).unsqueeze(dim=1)
-
-        return states, actions, rewards, next_states, dones
-
-    def __len__(self):
-        return len(self.buffer)
+from utils import get_spaces, ReplayBuffer
 
 
 class QNet(nn.Module):
@@ -41,7 +19,7 @@ class QNet(nn.Module):
         return self.ln3(x)
 
 
-def train(
+def train_dqn(
     target,
     main,
     optimizer,
@@ -60,9 +38,10 @@ def train(
     min_experiences = 1000
     update_frequency = 1000
     total_steps = 0
+    reward_logs = []
 
     while total_steps < steps:
-        obs, info = env.reset()
+        obs, _ = env.reset()
         current_state = obs
         done = False
         truncated = False
@@ -84,8 +63,8 @@ def train(
             else:
                 action = env.action_space.sample()  # Take random action
 
-            obs, reward, done, truncated, info = env.step(action)
-            episode_reward += reward  # Accumulate episode reward
+            obs, reward, done, truncated, _ = env.step(action)
+            episode_reward += float(reward)  # Accumulate episode reward
             replay_buffer.add(current_state, action, reward, obs, done)
             current_state = obs
 
@@ -110,22 +89,60 @@ def train(
                 loss.backward()
                 optimizer.step()
 
+        reward_logs.append(episode_reward)
         epsilon = max(min_eps, epsilon - decay)
         print(f"Epsilon value : {epsilon}, Cumulated reward : {episode_reward}")
 
     env.close()
 
+    return reward_logs
+
 
 if __name__ == "__main__":
     # State dim is 4, action space is 2
-    state_dim = 4
-    action_dim = 2
-    hidden_dim = 20
-    device = "mps"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env_name", type=str)
+    parser.add_argument(
+        "--hidden_dim", type=int
+    )  # This might be changed later one when having multiple architectures
+    parser.add_argument("--steps", type=int)
+    parser.add_argument("--capacity", type=int)
+    parser.add_argument("--epsilon", type=float)
+    parser.add_argument("--decay", type=float)
+    parser.add_argument("--min_eps", type=float)
+    parser.add_argument("--batch_size", type=float)
+    parser.add_argument("--gamma", type=float)
+    parser.add_argument("--lr", type=float)
 
-    target = QNet(state_dim, hidden_dim, action_dim).to(device)
-    main = QNet(state_dim, hidden_dim, action_dim).to(device)
+    args = parser.parse_args()
 
-    optimizer = torch.optim.Adam(main.parameters(), lr=1e-3)
+    action_space, observation_space = get_spaces(args.env_name)
 
-    train(target, main, optimizer)
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+
+    print(f"Using device: {device}")
+
+    target = QNet(observation_space, args.hidden_dim, action_space).to(device)
+    main = QNet(observation_space, args.hidden_dim, action_space).to(device)
+
+    optimizer = torch.optim.Adam(main.parameters(), lr=args.lr)
+
+    logs = train_dqn(
+        target,
+        main,
+        optimizer,
+        env_name=args.env_name,
+        steps=args.steps,
+        capacity=args.capacity,
+        epsilon=args.epsilon,
+        decay=args.decay,
+        min_eps=args.min_eps,
+        batch_size=args.batch_size,
+        gamma=args.gamma,
+    )
