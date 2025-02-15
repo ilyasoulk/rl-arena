@@ -4,6 +4,7 @@ import gymnasium as gym
 import torch.nn as nn
 import torch.nn.functional as F
 from utils import get_spaces, ReplayBuffer
+from torch.nn.utils import clip_grad_norm_
 
 
 class QNet(nn.Module):
@@ -19,6 +20,34 @@ class QNet(nn.Module):
         return self.ln3(x)
 
 
+@torch.no_grad()
+def eval_dqn(
+    model,
+    num_episodes,
+    env_name,
+):
+    print("Evaluating")
+    eval_env = gym.make(env_name, render_mode="human")
+    rewards = []
+    for _ in range(num_episodes):
+        current_state, _ = eval_env.reset()
+        done = False
+        truncated = False
+        episode_reward = 0
+        while not (done or truncated):
+            input = torch.tensor(current_state).to(device)
+            action = model(input).argmax().item()
+            current_state, reward, done, truncated, _ = eval_env.step(action)
+            episode_reward += float(reward)  # Accumulate episode reward
+
+        rewards.append(episode_reward)
+
+    eval_env.close()
+
+    avg_reward = sum(rewards) / num_episodes
+    return avg_reward
+
+
 def train_dqn(
     target,
     main,
@@ -27,22 +56,23 @@ def train_dqn(
     steps=100_000,
     capacity=100_000,
     epsilon=1,
+    update_frequency=100,
     decay=0.0001,
     min_eps=0.01,
     batch_size=32,
     gamma=0.99,
     device="mps",
 ):
-    env = gym.make(env_name, render_mode="human")  # Use "human" for visualization
+    env = gym.make(env_name)  # Use "human" for visualization
     replay_buffer = ReplayBuffer(capacity)
-    min_experiences = 1000
-    update_frequency = 1000
+    min_experiences = 100
+    eval_freq = 1000
     total_steps = 0
     reward_logs = []
+    avg_eval_rewards = 0
 
     while total_steps < steps:
-        obs, _ = env.reset()
-        current_state = obs
+        current_state, _ = env.reset()
         done = False
         truncated = False
         episode_reward = 0
@@ -51,6 +81,9 @@ def train_dqn(
             total_steps += 1
             if total_steps > steps:
                 break
+
+            if total_steps % eval_freq == 0:
+                avg_eval_rewards = eval_dqn(main, num_episodes=10, env_name=env_name)
 
             if total_steps % update_frequency == 0:
                 print("Target weights are being updated")
@@ -80,18 +113,25 @@ def train_dqn(
                     next_states = next_states.to(device)
                     rewards = rewards.to(device)
                     dones = dones.to(device)
-                    targets = rewards + gamma * target(next_states).max(dim=1)[0] * (
-                        1 - dones
-                    )
 
-                loss = ((targets - current_q_values) ** 2).mean()
+                    next_values = target(next_states)
+                    next_values_max = torch.max(next_values, dim=1).values.unsqueeze(
+                        dim=1
+                    )
+                    targets = rewards + gamma * next_values_max * (1 - dones)
+
+                loss = F.smooth_l1_loss(current_q_values, targets)
                 optimizer.zero_grad()
                 loss.backward()
+                clip_grad_norm_(main.parameters(), max_norm=1)
                 optimizer.step()
 
         reward_logs.append(episode_reward)
         epsilon = max(min_eps, epsilon - decay)
-        print(f"Epsilon value : {epsilon}, Cumulated reward : {episode_reward}")
+
+        print(
+            f"[{total_steps} step] Epsilon value : {epsilon}, Cumulated train reward : {episode_reward}, Average eval reward : {avg_eval_rewards}"
+        )
 
     env.close()
 
@@ -109,14 +149,17 @@ if __name__ == "__main__":
     parser.add_argument("--capacity", type=int)
     parser.add_argument("--epsilon", type=float)
     parser.add_argument("--decay", type=float)
+    parser.add_argument("--update_frequency", type=int)
     parser.add_argument("--min_eps", type=float)
-    parser.add_argument("--batch_size", type=float)
+    parser.add_argument("--batch_size", type=int)
     parser.add_argument("--gamma", type=float)
     parser.add_argument("--lr", type=float)
 
     args = parser.parse_args()
 
     action_space, observation_space = get_spaces(args.env_name)
+
+    print(f"Action space : {action_space}\nObservation space : {observation_space}")
 
     device = (
         "cuda"
@@ -141,6 +184,7 @@ if __name__ == "__main__":
         steps=args.steps,
         capacity=args.capacity,
         epsilon=args.epsilon,
+        update_frequency=args.update_frequency,
         decay=args.decay,
         min_eps=args.min_eps,
         batch_size=args.batch_size,
