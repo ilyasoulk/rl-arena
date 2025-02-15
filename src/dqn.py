@@ -84,6 +84,10 @@ def train_dqn(
 
             if total_steps % eval_freq == 0:
                 avg_eval_rewards = eval_dqn(main, num_episodes=10, env_name=env_name)
+                if (
+                    avg_eval_rewards > 475
+                ):  # This is the score at which we consider CartPole-v1 solved
+                    torch.save(main.state_dict(), args.output_dir + "/" + args.env_name)
 
             if total_steps % update_frequency == 0:
                 print("Target weights are being updated")
@@ -154,6 +158,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--gamma", type=float)
     parser.add_argument("--lr", type=float)
+    parser.add_argument("--output_dir", type=str)
 
     args = parser.parse_args()
 

@@ -11,4 +11,5 @@ python src/dqn.py \
 	--min_eps 0.01 \
 	--batch_size 32 \
 	--gamma 0.99 \
-	--lr 0.001
+	--lr 0.001 \
+	--output_dir models
