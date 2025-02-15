@@ -61,6 +61,7 @@ def train_dqn(
     min_eps=0.01,
     batch_size=32,
     gamma=0.99,
+    output_dir="models",
     device="mps",
 ):
     env = gym.make(env_name)  # Use "human" for visualization
@@ -68,7 +69,8 @@ def train_dqn(
     min_experiences = 100
     eval_freq = 1000
     total_steps = 0
-    reward_logs = []
+    train_reward_logs = []
+    eval_reward_logs = []
     avg_eval_rewards = 0
 
     while total_steps < steps:
@@ -84,10 +86,13 @@ def train_dqn(
 
             if total_steps % eval_freq == 0:
                 avg_eval_rewards = eval_dqn(main, num_episodes=10, env_name=env_name)
+                eval_reward_logs.append(avg_eval_rewards)
                 if (
                     avg_eval_rewards > 475
                 ):  # This is the score at which we consider CartPole-v1 solved
-                    torch.save(main.state_dict(), args.output_dir + "/" + args.env_name)
+                    print(f"{env_name} has been solved, saving the Q-function...")
+                    torch.save(main.state_dict(), output_dir + "/" + env_name)
+                    return train_reward_logs, eval_reward_logs
 
             if total_steps % update_frequency == 0:
                 print("Target weights are being updated")
@@ -130,7 +135,7 @@ def train_dqn(
                 clip_grad_norm_(main.parameters(), max_norm=1)
                 optimizer.step()
 
-        reward_logs.append(episode_reward)
+        train_reward_logs.append(episode_reward)
         epsilon = max(min_eps, epsilon - decay)
 
         print(
@@ -139,7 +144,7 @@ def train_dqn(
 
     env.close()
 
-    return reward_logs
+    return train_reward_logs, eval_reward_logs
 
 
 if __name__ == "__main__":
@@ -193,5 +198,6 @@ if __name__ == "__main__":
         decay=args.decay,
         min_eps=args.min_eps,
         batch_size=args.batch_size,
+        output_dir=args.output_dir,
         gamma=args.gamma,
     )
