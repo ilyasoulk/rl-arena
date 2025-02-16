@@ -123,9 +123,9 @@ def train_dqn(
                 loss.backward()
                 clip_grad_norm_(main.parameters(), max_norm=1)
                 optimizer.step()
+            epsilon = max(min_eps, epsilon - decay)
 
         train_reward_logs.append(episode_reward)
-        epsilon = max(min_eps, epsilon - decay)
 
         print(
             f"[{total_steps} step] Epsilon value : {epsilon}, Cumulated train reward : {episode_reward}, Average eval reward : {avg_eval_rewards}"
