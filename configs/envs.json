@@ -1,0 +1,30 @@
+{
+  "CartPole-v1": {
+    "model": "MLP",
+    "observation_space": 4,
+    "action_space": 2
+  },
+  "CarRacing-v3": {
+    "model": "ConvNet",
+    "env_args": {
+      "render_mode": "rgb_array",
+      "lap_complete_percent": 0.95,
+      "domain_randomize": false,
+      "continuous": false
+    },
+    "observation_space": [96, 96, 3],
+    "action_space": 5
+  },
+  "LunarLander-v3": {
+    "model": "MLP",
+    "env_args": {
+      "continuous": false,
+      "gravity": -10.0,
+      "enable_wind": false,
+      "wind_power": 15.0,
+      "turbulence_power": 1.5
+    },
+    "action_space": 4,
+    "observation_space": 8
+  }
+}
