@@ -1,7 +1,7 @@
 #!/bin/sh
 
 python src/dqn.py \
-	--env_name CartPole-v1 \
+	--env_name LunarLander-v3 \
 	--hidden_dim 128 \
 	--steps 50_000 \
 	--capacity 10_000 \
@@ -13,4 +13,4 @@ python src/dqn.py \
 	--gamma 0.99 \
 	--lr 0.001 \
 	--output_dir models \
-	--solved_threshold 475
+	--solved_threshold 200
