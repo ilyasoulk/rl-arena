@@ -1,18 +1,18 @@
-from gymnasium.spaces import Discrete
 import torch
+import ale_py
 import models
 import argparse
-import numpy as np
 import gymnasium as gym
 import torch.nn.functional as F
-from utils import get_spaces, ReplayBuffer, EnvConfig
 from torch.nn.utils import clip_grad_norm_
+from utils import ReplayBuffer, EnvConfig, preprocess
 
 
 @torch.no_grad()
 def eval_dqn(model, num_episodes, env_name, env_config):
     print("Evaluating")
     eval_env = env_config.create_env(env_name)
+    mode = env_config.get_model_type(env_name)
     rewards = []
     for _ in range(num_episodes):
         current_state, _ = eval_env.reset()
@@ -20,8 +20,8 @@ def eval_dqn(model, num_episodes, env_name, env_config):
         truncated = False
         episode_reward = 0
         while not (done or truncated):
-            input = torch.tensor(current_state).to(device)
-            action = model(input).argmax().item()
+            inputs = preprocess(current_state, mode=mode).to(device)
+            action = model(inputs).argmax().item()
             current_state, reward, done, truncated, _ = eval_env.step(action)
             episode_reward += float(reward)  # Accumulate episode reward
 
@@ -52,7 +52,8 @@ def train_dqn(
     device="mps",
 ):
     env = env_config.create_env(env_name)
-    replay_buffer = ReplayBuffer(capacity)
+    model_type = env_config.get_model_type(args.env_name)
+    replay_buffer = ReplayBuffer(capacity, mode=model_type)
     min_experiences = 100
     eval_freq = 1000
     total_steps = 0
@@ -88,8 +89,8 @@ def train_dqn(
                 target.load_state_dict(main.state_dict())
 
             if torch.rand(1).item() > epsilon:
-                input = torch.tensor(current_state).to(device)
-                action = main(input).argmax().item()
+                inputs = preprocess(current_state, mode=model_type).to(device)
+                action = main(inputs).argmax().item()
 
             else:
                 action = env.action_space.sample()  # Take random action
@@ -137,6 +138,7 @@ def train_dqn(
 
 
 if __name__ == "__main__":
+    gym.register_envs(ale_py)
     parser = argparse.ArgumentParser()
     parser.add_argument("--env_name", type=str)
     parser.add_argument(
@@ -159,7 +161,7 @@ if __name__ == "__main__":
 
     env_config = EnvConfig("configs/envs.json")
 
-    action_space, observation_space = get_spaces(env_config, args.env_name)
+    action_space, observation_space = env_config.get_spaces(args.env_name)
 
     print(f"Action space : {action_space}\nObservation space : {observation_space}")
 
