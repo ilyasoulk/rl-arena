@@ -4,10 +4,11 @@ A comprehensive implementation of reinforcement learning algorithms following Op
 
 ## 🚀 Currently Implemented
 - [x] Deep Q-Network (DQN)
-  - Successfully tested on CartPole-v1
+  - Successfully tested on CartPole-v1 and LunarLander-v3
   - Includes experience replay
   - Target network for stability
   - Epsilon-greedy exploration
+  - L1 smooth loss
 
 ## 🎯 Roadmap
 Planning to implement the following algorithms from OpenAI's Spinning Up (and more):
@@ -58,16 +59,33 @@ python src/dqn.py \
     --output_dir models
 ```
 
+### DQN on LunarLander
+
+```bash
+./launch_lunarlander_dqn.sh
+```
+
 ## 📁 Project Structure
 ```
-ilyasoulk-rl-arena/
-├── README.md
-├── launch_cartpole_dqn.sh       # Launch script for DQN experiment
-├── pyproject.toml               # Project dependencies and metadata
-├── uv.lock                      # Dependency lock file
-└── src/
-    ├── dqn.py                   # DQN implementation
-    └── utils.py                 # Shared utilities
+Directory structure:
+└── ilyasoulk-rl-arena/
+    ├── README.md
+    ├── LICENSE
+    ├── launch_carracing_dqn.sh # Launch DQN CarRacing experiment
+    ├── launch_cartpole_dqn.sh # CartPole-v1
+    ├── launch_lunarlander_dqn.sh # LunarLander-v3
+    ├── pyproject.toml # Project dependencies
+    ├── uv.lock # Dependency lock
+    ├── configs/
+    │   └── envs.json # Env configs, parameters...
+    ├── models/ # Models per env, currently only DQN models...
+    │   ├── CartPole-v1.pth
+    │   └── LunarLander-v3.pth
+    └── src/
+        ├── dqn.py # DQN implementation
+        ├── models.py # Model architecture
+        └── utils.py # Utils function for env configs, experience replay, action obs space inference.
+
 ```
 
 ## 🔧 Technical Details
@@ -81,6 +99,7 @@ ilyasoulk-rl-arena/
 
 ## 📚 References
 
+- [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/pdf/1312.5602)
 - [OpenAI Spinning Up](https://spinningup.openai.com/)
 - [Gymnasium (formerly Gym)](https://gymnasium.farama.org/)
 
