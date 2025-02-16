@@ -26,5 +26,16 @@
     },
     "action_space": 4,
     "observation_space": 8
+  },
+  "ALE/Pong-v5": {
+    "model": "ConvNet",
+    "env_args": {
+      "obs_type": "grayscale",
+      "frameskip": 4,
+      "repeat_action_probability": 0.0,
+      "full_action_space": false
+    },
+    "observation_space": [84, 84, 1],
+    "action_space": 6
   }
 }

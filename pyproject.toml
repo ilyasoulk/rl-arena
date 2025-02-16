@@ -5,7 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "gymnasium[box2d,classic-control]>=1.0.0",
+    "ale-py>=0.10.2",
+    "gymnasium[accept-rom-license,ale,atari,box2d,classic-control]>=1.0.0",
     "ipdb>=0.13.13",
     "stable-baselines3>=2.5.0",
     "swig>=4.3.0",
