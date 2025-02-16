@@ -1,33 +1,18 @@
+from gymnasium.spaces import Discrete
 import torch
+import models
 import argparse
+import numpy as np
 import gymnasium as gym
-import torch.nn as nn
 import torch.nn.functional as F
-from utils import get_spaces, ReplayBuffer
+from utils import get_spaces, ReplayBuffer, EnvConfig
 from torch.nn.utils import clip_grad_norm_
 
 
-class QNet(nn.Module):
-    def __init__(self, state_dim, hidden_dim, action_dim):
-        super().__init__()
-        self.ln1 = nn.Linear(state_dim, hidden_dim)
-        self.ln2 = nn.Linear(hidden_dim, hidden_dim)
-        self.ln3 = nn.Linear(hidden_dim, action_dim)
-
-    def forward(self, x):
-        x = F.relu(self.ln1(x))
-        x = F.relu(self.ln2(x))
-        return self.ln3(x)
-
-
 @torch.no_grad()
-def eval_dqn(
-    model,
-    num_episodes,
-    env_name,
-):
+def eval_dqn(model, num_episodes, env_name, env_config):
     print("Evaluating")
-    eval_env = gym.make(env_name, render_mode="human")
+    eval_env = env_config.create_env(env_name)
     rewards = []
     for _ in range(num_episodes):
         current_state, _ = eval_env.reset()
@@ -52,6 +37,8 @@ def train_dqn(
     target,
     main,
     optimizer,
+    env_config,
+    solved_threshold,
     env_name="CartPole-v1",
     steps=100_000,
     capacity=100_000,
@@ -64,7 +51,7 @@ def train_dqn(
     output_dir="models",
     device="mps",
 ):
-    env = gym.make(env_name)  # Use "human" for visualization
+    env = env_config.create_env(env_name)
     replay_buffer = ReplayBuffer(capacity)
     min_experiences = 100
     eval_freq = 1000
@@ -85,10 +72,12 @@ def train_dqn(
                 break
 
             if total_steps % eval_freq == 0:
-                avg_eval_rewards = eval_dqn(main, num_episodes=10, env_name=env_name)
+                avg_eval_rewards = eval_dqn(
+                    main, num_episodes=10, env_name=env_name, env_config=env_config
+                )
                 eval_reward_logs.append(avg_eval_rewards)
                 if (
-                    avg_eval_rewards > 475
+                    avg_eval_rewards > solved_threshold
                 ):  # This is the score at which we consider CartPole-v1 solved
                     print(f"{env_name} has been solved, saving the Q-function...")
                     torch.save(main.state_dict(), output_dir + "/" + env_name)
@@ -148,7 +137,6 @@ def train_dqn(
 
 
 if __name__ == "__main__":
-    # State dim is 4, action space is 2
     parser = argparse.ArgumentParser()
     parser.add_argument("--env_name", type=str)
     parser.add_argument(
@@ -164,10 +152,14 @@ if __name__ == "__main__":
     parser.add_argument("--gamma", type=float)
     parser.add_argument("--lr", type=float)
     parser.add_argument("--output_dir", type=str)
+    parser.add_argument("--model", type=str)
+    parser.add_argument("--solved_threshold", type=float)
 
     args = parser.parse_args()
 
-    action_space, observation_space = get_spaces(args.env_name)
+    env_config = EnvConfig("configs/envs.json")
+
+    action_space, observation_space = get_spaces(env_config, args.env_name)
 
     print(f"Action space : {action_space}\nObservation space : {observation_space}")
 
@@ -181,8 +173,10 @@ if __name__ == "__main__":
 
     print(f"Using device: {device}")
 
-    target = QNet(observation_space, args.hidden_dim, action_space).to(device)
-    main = QNet(observation_space, args.hidden_dim, action_space).to(device)
+    model_type = env_config.get_model_type(args.env_name)
+    model_class = getattr(models, model_type)
+    target = model_class(observation_space, args.hidden_dim, action_space).to(device)
+    main = model_class(observation_space, args.hidden_dim, action_space).to(device)
 
     optimizer = torch.optim.Adam(main.parameters(), lr=args.lr)
 
@@ -190,6 +184,7 @@ if __name__ == "__main__":
         target,
         main,
         optimizer,
+        env_config=env_config,
         env_name=args.env_name,
         steps=args.steps,
         capacity=args.capacity,
@@ -200,4 +195,5 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         output_dir=args.output_dir,
         gamma=args.gamma,
+        solved_threshold=args.solved_threshold,
     )
