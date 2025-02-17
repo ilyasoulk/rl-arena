@@ -13,4 +13,5 @@ python src/dqn.py \
 	--gamma 0.99 \
 	--lr 0.0005 \
 	--output_dir models \
-	--solved_threshold 21
+	--solved_threshold 21 \
+	--num_frame_stack 4

@@ -16,9 +16,8 @@ class MLP(nn.Module):
 
 
 class ConvNet(nn.Module):
-    def __init__(self, observation_space, hidden_dim, action_space):
+    def __init__(self, in_channels, hidden_dim, action_space):
         super().__init__()
-        in_channels = observation_space[-1]  # 1 for grayscale images
 
         self.features = nn.Sequential(
             nn.Conv2d(in_channels, 32, kernel_size=8, stride=4),  # Output: 20x20x32
@@ -28,11 +27,13 @@ class ConvNet(nn.Module):
             nn.Conv2d(64, 64, kernel_size=3, stride=1),  # Output: 7x7x64
             nn.ReLU(),
             nn.Flatten(),  # Output: 3136 (7*7*64)
-            nn.Linear(3136, 512),
+            nn.Linear(3136, hidden_dim),
             nn.ReLU(),
         )
 
-        self.head = nn.Linear(512, action_space)  # Output: action_space (Q-values)
+        self.head = nn.Linear(
+            hidden_dim, action_space
+        )  # Output: action_space (Q-values)
 
     def forward(self, x):
         if len(x.shape) == 3:

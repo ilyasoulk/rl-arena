@@ -5,17 +5,19 @@ import argparse
 import gymnasium as gym
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
-from utils import ReplayBuffer, EnvConfig, preprocess
+from utils import ReplayBuffer, FrameStack, EnvConfig, preprocess
 
 
 @torch.no_grad()
-def eval_dqn(model, num_episodes, env_name, env_config):
+def eval_dqn(model, num_episodes, env_name, env_config, num_frame_stack=1):
     print("Evaluating")
     eval_env = env_config.create_env(env_name)
     mode = env_config.get_model_type(env_name)
+    frame_stack = FrameStack(num_frame_stack, mode=mode)
     rewards = []
     for _ in range(num_episodes):
         current_state, _ = eval_env.reset()
+        current_state = frame_stack.reset(current_state)
         done = False
         truncated = False
         episode_reward = 0
@@ -23,6 +25,7 @@ def eval_dqn(model, num_episodes, env_name, env_config):
             inputs = preprocess(current_state, mode=mode).to(device)
             action = model(inputs).argmax().item()
             current_state, reward, done, truncated, _ = eval_env.step(action)
+            current_state = frame_stack.update(current_state)
             episode_reward += float(reward)  # Accumulate episode reward
 
         rewards.append(episode_reward)
@@ -49,11 +52,13 @@ def train_dqn(
     batch_size=32,
     gamma=0.99,
     output_dir="models",
+    num_frame_stack=1,
     device="mps",
 ):
     env = env_config.create_env(env_name)
     model_type = env_config.get_model_type(args.env_name)
     replay_buffer = ReplayBuffer(capacity, mode=model_type)
+    frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type)
     min_experiences = 100
     eval_freq = 1000
     total_steps = 0
@@ -63,6 +68,7 @@ def train_dqn(
 
     while total_steps < steps:
         current_state, _ = env.reset()
+        current_state = frame_stack.reset(current_state)  # Initialize stacked frames
         done = False
         truncated = False
         episode_reward = 0
@@ -74,7 +80,11 @@ def train_dqn(
 
             if total_steps % eval_freq == 0:
                 avg_eval_rewards = eval_dqn(
-                    main, num_episodes=10, env_name=env_name, env_config=env_config
+                    main,
+                    num_episodes=10,
+                    env_name=env_name,
+                    env_config=env_config,
+                    num_frame_stack=num_frame_stack,
                 )
                 eval_reward_logs.append(avg_eval_rewards)
                 if (
@@ -96,6 +106,7 @@ def train_dqn(
                 action = env.action_space.sample()  # Take random action
 
             obs, reward, done, truncated, _ = env.step(action)
+            obs = frame_stack.update(obs)
             episode_reward += float(reward)  # Accumulate episode reward
             replay_buffer.add(current_state, action, reward, obs, done)
             current_state = obs
@@ -156,6 +167,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str)
     parser.add_argument("--model", type=str)
     parser.add_argument("--solved_threshold", type=float)
+    parser.add_argument("--num_frame_stack", type=int, default=1)
 
     args = parser.parse_args()
 
@@ -177,8 +189,12 @@ if __name__ == "__main__":
 
     model_type = env_config.get_model_type(args.env_name)
     model_class = getattr(models, model_type)
-    target = model_class(observation_space, args.hidden_dim, action_space).to(device)
-    main = model_class(observation_space, args.hidden_dim, action_space).to(device)
+    if model_type == "ConvNet":
+        in_dim = observation_space[-1] * args.num_frame_stack
+    else:
+        in_dim = observation_space
+    target = model_class(in_dim, args.hidden_dim, action_space).to(device)
+    main = model_class(in_dim, args.hidden_dim, action_space).to(device)
 
     optimizer = torch.optim.Adam(main.parameters(), lr=args.lr)
 
@@ -198,4 +214,5 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         gamma=args.gamma,
         solved_threshold=args.solved_threshold,
+        num_frame_stack=args.num_frame_stack,
     )
