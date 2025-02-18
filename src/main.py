@@ -84,7 +84,7 @@ if __name__ == "__main__":
         vpg(
             main,
             args.env_name,
-            args.env_config,
+            env_config,
             args.steps,
             args.gamma,
             optimizer,

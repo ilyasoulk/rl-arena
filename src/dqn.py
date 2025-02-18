@@ -59,7 +59,9 @@ def dqn(
                     avg_eval_rewards > solved_threshold
                 ):  # This is the score at which we consider CartPole-v1 solved
                     print(f"{env_name} has been solved, saving the Q-function...")
-                    torch.save(main.state_dict(), output_dir + "/DQN-" + env_name)
+                    torch.save(
+                        main.state_dict(), output_dir + "/DQN-" + env_name + ".pth"
+                    )
                     return train_reward_logs, eval_reward_logs
 
             if total_steps % update_frequency == 0:
