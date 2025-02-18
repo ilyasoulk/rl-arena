@@ -1,8 +1,9 @@
 #!/bin/sh
 
-python src/dqn.py \
+python src/main.py \
 	--env_name LunarLander-v3 \
-	--hidden_dim 128 \
+	--method DQN
+--hidden_dim 128 \
 	--steps 500_000 \
 	--capacity 100_000 \
 	--epsilon 1 \

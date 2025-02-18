@@ -1,42 +1,10 @@
 import torch
-import ale_py
-import models
-import argparse
-import gymnasium as gym
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
-from utils import ReplayBuffer, FrameStack, EnvConfig, preprocess
+from utils import ReplayBuffer, FrameStack, preprocess, eval
 
 
-@torch.no_grad()
-def eval_dqn(model, num_episodes, env_name, env_config, num_frame_stack=1):
-    print("Evaluating")
-    eval_env = env_config.create_env(env_name)
-    mode = env_config.get_model_type(env_name)
-    frame_stack = FrameStack(num_frame_stack, mode=mode)
-    rewards = []
-    for _ in range(num_episodes):
-        current_state, _ = eval_env.reset()
-        current_state = frame_stack.reset(current_state)
-        done = False
-        truncated = False
-        episode_reward = 0
-        while not (done or truncated):
-            inputs = preprocess(current_state, mode=mode).to(device)
-            action = model(inputs).argmax().item()
-            current_state, reward, done, truncated, _ = eval_env.step(action)
-            current_state = frame_stack.update(current_state)
-            episode_reward += float(reward)  # Accumulate episode reward
-
-        rewards.append(episode_reward)
-
-    eval_env.close()
-
-    avg_reward = sum(rewards) / num_episodes
-    return avg_reward
-
-
-def train_dqn(
+def dqn(
     target,
     main,
     optimizer,
@@ -56,7 +24,7 @@ def train_dqn(
     device="mps",
 ):
     env = env_config.create_env(env_name)
-    model_type = env_config.get_model_type(args.env_name)
+    model_type = env_config.get_model_type(env_name)
     replay_buffer = ReplayBuffer(capacity, mode=model_type)
     frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type)
     min_experiences = 100
@@ -79,7 +47,7 @@ def train_dqn(
                 break
 
             if total_steps % eval_freq == 0:
-                avg_eval_rewards = eval_dqn(
+                avg_eval_rewards = eval(
                     main,
                     num_episodes=10,
                     env_name=env_name,
@@ -91,7 +59,7 @@ def train_dqn(
                     avg_eval_rewards > solved_threshold
                 ):  # This is the score at which we consider CartPole-v1 solved
                     print(f"{env_name} has been solved, saving the Q-function...")
-                    torch.save(main.state_dict(), output_dir + "/" + env_name)
+                    torch.save(main.state_dict(), output_dir + "/DQN-" + env_name)
                     return train_reward_logs, eval_reward_logs
 
             if total_steps % update_frequency == 0:
@@ -146,73 +114,3 @@ def train_dqn(
     env.close()
 
     return train_reward_logs, eval_reward_logs
-
-
-if __name__ == "__main__":
-    gym.register_envs(ale_py)
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--env_name", type=str)
-    parser.add_argument(
-        "--hidden_dim", type=int
-    )  # This might be changed later one when having multiple architectures
-    parser.add_argument("--steps", type=int)
-    parser.add_argument("--capacity", type=int)
-    parser.add_argument("--epsilon", type=float)
-    parser.add_argument("--decay", type=float)
-    parser.add_argument("--update_frequency", type=int)
-    parser.add_argument("--min_eps", type=float)
-    parser.add_argument("--batch_size", type=int)
-    parser.add_argument("--gamma", type=float)
-    parser.add_argument("--lr", type=float)
-    parser.add_argument("--output_dir", type=str)
-    parser.add_argument("--model", type=str)
-    parser.add_argument("--solved_threshold", type=float)
-    parser.add_argument("--num_frame_stack", type=int, default=1)
-
-    args = parser.parse_args()
-
-    env_config = EnvConfig("configs/envs.json")
-
-    action_space, observation_space = env_config.get_spaces(args.env_name)
-
-    print(f"Action space : {action_space}\nObservation space : {observation_space}")
-
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
-
-    print(f"Using device: {device}")
-
-    model_type = env_config.get_model_type(args.env_name)
-    model_class = getattr(models, model_type)
-    if model_type == "ConvNet":
-        in_dim = observation_space[-1] * args.num_frame_stack
-    else:
-        in_dim = observation_space
-    target = model_class(in_dim, args.hidden_dim, action_space).to(device)
-    main = model_class(in_dim, args.hidden_dim, action_space).to(device)
-
-    optimizer = torch.optim.Adam(main.parameters(), lr=args.lr)
-
-    logs = train_dqn(
-        target,
-        main,
-        optimizer,
-        env_config=env_config,
-        env_name=args.env_name,
-        steps=args.steps,
-        capacity=args.capacity,
-        epsilon=args.epsilon,
-        update_frequency=args.update_frequency,
-        decay=args.decay,
-        min_eps=args.min_eps,
-        batch_size=args.batch_size,
-        output_dir=args.output_dir,
-        gamma=args.gamma,
-        solved_threshold=args.solved_threshold,
-        num_frame_stack=args.num_frame_stack,
-    )

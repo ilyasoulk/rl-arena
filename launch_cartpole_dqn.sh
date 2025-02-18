@@ -1,7 +1,8 @@
 #!/bin/sh
 
-python src/dqn.py \
+python src/main.py \
 	--env_name CartPole-v1 \
+	--method DQN \
 	--hidden_dim 128 \
 	--steps 50_000 \
 	--capacity 10_000 \

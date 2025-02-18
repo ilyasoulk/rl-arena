@@ -6,6 +6,34 @@ from collections import deque
 import torch.nn.functional as F
 
 
+@torch.no_grad()
+def eval(policy, num_episodes, env_name, env_config, num_frame_stack=1, device="mps"):
+    print("Evaluating")
+    eval_env = env_config.create_env(env_name)
+    mode = env_config.get_model_type(env_name)
+    frame_stack = FrameStack(num_frame_stack, mode=mode)
+    rewards = []
+    for _ in range(num_episodes):
+        current_state, _ = eval_env.reset()
+        current_state = frame_stack.reset(current_state)
+        done = False
+        truncated = False
+        episode_reward = 0
+        while not (done or truncated):
+            inputs = preprocess(current_state, mode=mode).to(device)
+            action = policy(inputs).argmax().item()
+            current_state, reward, done, truncated, _ = eval_env.step(action)
+            current_state = frame_stack.update(current_state)
+            episode_reward += float(reward)  # Accumulate episode reward
+
+        rewards.append(episode_reward)
+
+    eval_env.close()
+
+    avg_reward = sum(rewards) / num_episodes
+    return avg_reward
+
+
 def preprocess(state, mode):
     state = torch.tensor(state)
     if mode == "ConvNet":
