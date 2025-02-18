@@ -3,9 +3,9 @@ import torch.nn.functional as F
 from utils import preprocess, FrameStack, eval
 
 
-def compute_returns(rewards, gamma):
+def compute_returns(rewards, gamma, device="mps"):
     T = len(rewards)
-    returns = torch.zeros(T, device=rewards.device)
+    returns = torch.zeros(T, device=device)
     future_return = 0
 
     for i in reversed(range(T)):
@@ -36,6 +36,7 @@ def vpg(
     eval_reward_logs = []
     total_steps = 0
     eval_freq = 1000
+    avg_eval_rewards = 0
 
     while total_steps < steps:
         current_state, _ = env.reset()
@@ -63,7 +64,9 @@ def vpg(
                     avg_eval_rewards > solved_threshold
                 ):  # This is the score at which we consider CartPole-v1 solved
                     print(f"{env_name} has been solved, saving the Q-function...")
-                    torch.save(policy.state_dict(), output_dir + "/VPG-" + env_name)
+                    torch.save(
+                        policy.state_dict(), output_dir + "/VPG-" + env_name + ".pth"
+                    )
                     return train_reward_logs, eval_reward_logs
 
             inputs = preprocess(current_state, mode=model_type).to(device)
@@ -74,21 +77,21 @@ def vpg(
             action = distribution.sample()
             logprob = distribution.log_prob(action)
 
-            obs, reward, done, truncated, _ = env.step(action)
+            obs, reward, done, truncated, _ = env.step(action.item())
             episode_batch.append((logprob, reward))
             episode_reward += float(reward)
             current_state = obs
 
         logprobs, rewards = list(zip(*episode_batch))
 
-        returns = compute_returns(rewards, gamma=gamma)
+        returns = compute_returns(rewards, gamma=gamma, device=device)
         logprobs = torch.stack(logprobs)
         loss = -(logprobs * returns).mean()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         print(
-            f"[{total_steps} steps] Loss : {loss.item()} | Episode Reward : {episode_reward}"
+            f"[{total_steps} steps] Loss : {loss.item()} | Episode Reward : {episode_reward} | Avg Eval Reward : {avg_eval_rewards}"
         )
 
     return train_reward_logs, eval_reward_logs
