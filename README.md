@@ -4,15 +4,25 @@ A comprehensive implementation of reinforcement learning algorithms following Op
 
 ## 🚀 Currently Implemented
 - [x] Deep Q-Network (DQN)
-  - Successfully tested on CartPole-v1 and LunarLander-v3
+  - Successfully tested on CartPole-v1 (solved in ~18k steps) and LunarLander-v3
   - Includes experience replay
   - Target network for stability
   - Epsilon-greedy exploration
   - L1 smooth loss
+  - Frame stacking support
+
+- [x] Vanilla Policy Gradient (VPG)
+  - Successfully tested on CartPole-v1 (solved in ~11k steps)
+  - Direct policy optimization using REINFORCE
+  - Return normalization for stability
+  - Stochastic action sampling for exploration
+  - Frame stacking support
+  - Periodic evaluation during training
 
 ## 🎯 Roadmap
 Planning to implement the following algorithms from OpenAI's Spinning Up (and more):
-- [ ] Vanilla Policy Gradient (VPG)
+- [x] Deep-Q-Network (DQN)
+- [x] Vanilla Policy Gradient (VPG)
 - [ ] Trust Region Policy Optimization (TRPO)
 - [ ] Proximal Policy Optimization (PPO)
 - [ ] Deep Deterministic Policy Gradient (DDPG)
@@ -30,7 +40,6 @@ cd rl-arena
 # Install dependencies
 uv sync
 source .venv/bin/activate
-
 ```
 
 ## 🏃‍♂️ Running Experiments
@@ -44,7 +53,8 @@ source .venv/bin/activate
 Or manually with custom parameters:
 
 ```bash
-python src/dqn.py \
+python src/main.py \
+    --method DQN \
     --env_name CartPole-v1 \
     --hidden_dim 128 \
     --steps 50000 \
@@ -56,36 +66,57 @@ python src/dqn.py \
     --batch_size 32 \
     --gamma 0.99 \
     --lr 0.001 \
+    --output_dir models \
+    --solved_threshold 475
+```
+
+### VPG on CartPole
+
+```bash
+./launch_cartpole_vpg.sh
+```
+
+Or manually with custom parameters:
+
+```bash
+python src/main.py \
+    --method VPG \
+    --env_name CartPole-v1 \
+    --hidden_dim 128 \
+    --steps 50000 \
+    --gamma 0.99 \
+    --lr 0.001 \
+    --num_frame_stack 1 \
+    --solved_threshold 475 \
     --output_dir models
 ```
 
-### DQN on LunarLander
-
-```bash
-./launch_lunarlander_dqn.sh
-```
-
 ## 📁 Project Structure
+
 ```
 Directory structure:
 └── ilyasoulk-rl-arena/
     ├── README.md
     ├── LICENSE
-    ├── launch_carracing_dqn.sh # Launch DQN CarRacing experiment
-    ├── launch_cartpole_dqn.sh # CartPole-v1
-    ├── launch_lunarlander_dqn.sh # LunarLander-v3
-    ├── pyproject.toml # Project dependencies
-    ├── uv.lock # Dependency lock
+    ├── launch_carracing_dqn.sh
+    ├── launch_cartpole_dqn.sh
+    ├── launch_cartpole_vpg.sh
+    ├── launch_lunarlander_dqn.sh
+    ├── launch_pong_dqn.sh
+    ├── pyproject.toml
+    ├── uv.lock
     ├── configs/
-    │   └── envs.json # Env configs, parameters...
-    ├── models/ # Models per env, currently only DQN models...
-    │   ├── CartPole-v1.pth
-    │   └── LunarLander-v3.pth
+    │   └── envs.json
+    ├── models/
+    │   ├── DQN-CartPole-v1.pth
+    │   ├── DQN-LunarLander-v3.pth
+    │   └── VPG-CartPole-v1.pth
     └── src/
-        ├── dqn.py # DQN implementation
-        ├── models.py # Model architecture
-        └── utils.py # Utils function for env configs, experience replay, action obs space inference.
-
+        ├── dqn.py
+        ├── main.py
+        ├── models.py
+        ├── utils.py
+        └── vpg.py
 ```
 
 ## 🔧 Technical Details
@@ -96,10 +127,29 @@ Directory structure:
 - Epsilon-greedy exploration with decay
 - Gradient clipping for stability
 - Support for various gym environments through space detection
+- Frame stacking for temporal information
+- Configurable network architectures (MLP/CNN)
+
+### VPG Implementation Features
+- Direct policy optimization using REINFORCE algorithm
+- Return normalization for training stability
+- Stochastic action sampling using Categorical distribution
+- Frame stacking support for temporal information
+- Periodic evaluation during training
+- Model saving when environment is solved
+- Support for both discrete and continuous action spaces
+
+## 📈 Performance Comparisons
+
+| Algorithm | Environment  | Steps to Solve |
+|-----------|-------------|----------------|
+| DQN       | CartPole-v1 | ~18,000       |
+| VPG       | CartPole-v1 | ~11,000       |
 
 ## 📚 References
 
 - [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/pdf/1312.5602)
+- [Policy Gradient Methods for Reinforcement Learning with Function Approximation](https://papers.nips.cc/paper/1999/file/464d828b85b0bed98e80ade0a5c43b0f-Paper.pdf)
 - [OpenAI Spinning Up](https://spinningup.openai.com/)
 - [Gymnasium (formerly Gym)](https://gymnasium.farama.org/)
 
