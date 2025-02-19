@@ -20,10 +20,15 @@ def eval(policy, num_episodes, env_name, env_config, num_frame_stack=1, device="
         truncated = False
         episode_reward = 0
         while not (done or truncated):
-            inputs = preprocess(current_state, mode=mode).to(device)
-            action = policy(inputs).argmax().item()
-            current_state, reward, done, truncated, _ = eval_env.step(action)
-            current_state = frame_stack.update(current_state)
+            # action = policy(inputs).argmax().item()
+            estimated_returns = policy(current_state)
+            print(f"estimated_returns shape : {estimated_returns.shape}")
+            print(f"estimated_returns : {estimated_returns}")
+
+            action = estimated_returns.argmax()
+            print(f"Chosen action : {action}")
+            obs, reward, done, truncated, _ = eval_env.step(action.item())
+            current_state = frame_stack.update(obs)
             episode_reward += float(reward)  # Accumulate episode reward
 
         rewards.append(episode_reward)
@@ -40,7 +45,7 @@ def preprocess(state, mode):
         if len(state.shape) == 2:  # If no channel dim
             state = state.unsqueeze(-1)
 
-        # Convert to torch and resize
+            # Convert to torch and resize
         state = (
             F.interpolate(
                 state.float().permute(2, 0, 1).unsqueeze(0),
@@ -51,6 +56,8 @@ def preprocess(state, mode):
             .squeeze(0)
             .permute(1, 2, 0)
         )
+
+        state = state / 255.0
 
     return state
 
@@ -90,9 +97,13 @@ class ReplayBuffer:
 
 
 class EnvConfig:
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str, eval=False):
+        self.eval = eval
         with open(config_path, "r") as f:
             self.configs = json.load(f)
+
+    def set_eval(self, eval):
+        self.eval = eval
 
     def get_env_config(self, env_name: str):
         if env_name not in self.configs:
@@ -102,6 +113,8 @@ class EnvConfig:
     def create_env(self, env_name: str):
         config = self.get_env_config(env_name)
         env_args = config.get("env_args", {})
+        if self.eval:
+            env_args["render_mode"] = "human"
         return gym.make(env_name, **env_args)
 
     def get_model_type(self, env_name: str):
@@ -113,18 +126,58 @@ class EnvConfig:
 
 
 class FrameStack:
-    def __init__(self, stack_size, mode):
+    def __init__(self, stack_size, mode, device="mps"):
         self.stack_size = stack_size
         self.frames = deque(maxlen=stack_size)
         self.mode = mode
+        self.device = device
 
     def reset(self, state):
-        processed_state = preprocess(state, mode=self.mode)
+        processed_state = preprocess(state, mode=self.mode).to(self.device)
         for _ in range(self.stack_size):
-            self.frames.append(processed_state)
-        return torch.cat(list(self.frames), dim=-1)
+            self.frames.append(processed_state.clone())
+
+        stacked = torch.cat(list(self.frames), dim=-1)
+
+        return stacked
 
     def update(self, state):
-        processed_state = preprocess(state, mode=self.mode)
-        self.frames.append(processed_state)
-        return torch.cat(list(self.frames), dim=-1)
+        processed_state = preprocess(state, mode=self.mode).to(self.device)
+        self.frames.append(processed_state.clone())
+
+        stacked = torch.cat(list(self.frames), dim=-1)
+        return stacked
+
+    def visualize_frames(self):
+        """Visualize all frames in the stack using matplotlib."""
+        import matplotlib.pyplot as plt
+
+        num_frames = len(self.frames)
+        fig, axes = plt.subplots(1, num_frames, figsize=(3 * num_frames, 3))
+
+        # Handle case where there's only one frame
+        if num_frames == 1:
+            axes = [axes]
+
+        for i, frame in enumerate(self.frames):
+            # Move tensor to CPU and convert to numpy array
+            frame_np = frame.cpu().squeeze().numpy()
+            axes[i].imshow(frame_np, cmap="gray" if frame_np.ndim == 2 else None)
+            axes[i].axis("off")
+            axes[i].set_title(f"Frame {i+1}")
+
+        plt.tight_layout()
+        plt.show()
+
+
+def soft_update(target_network, policy_network, tau=0.005):
+    """
+    Soft update of target network parameters
+    θ_target = τ*θ_policy + (1 - τ)*θ_target
+    """
+    for target_param, policy_param in zip(
+        target_network.parameters(), policy_network.parameters()
+    ):
+        target_param.data.copy_(
+            tau * policy_param.data + (1.0 - tau) * target_param.data
+        )

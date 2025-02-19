@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
-from utils import ReplayBuffer, FrameStack, preprocess, eval
+from utils import ReplayBuffer, FrameStack, preprocess, eval, soft_update
 
 
 def dqn(
@@ -27,8 +27,8 @@ def dqn(
     model_type = env_config.get_model_type(env_name)
     replay_buffer = ReplayBuffer(capacity, mode=model_type)
     frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type)
-    min_experiences = 100
-    eval_freq = 1000
+    min_experiences = batch_size * 2
+    eval_freq = 5000
     total_steps = 0
     train_reward_logs = []
     eval_reward_logs = []
@@ -66,7 +66,7 @@ def dqn(
 
             if total_steps % update_frequency == 0:
                 print("Target weights are being updated")
-                target.load_state_dict(main.state_dict())
+                soft_update(target, main)
 
             if torch.rand(1).item() > epsilon:
                 inputs = preprocess(current_state, mode=model_type).to(device)
@@ -76,6 +76,7 @@ def dqn(
                 action = env.action_space.sample()  # Take random action
 
             obs, reward, done, truncated, _ = env.step(action)
+
             obs = frame_stack.update(obs)
             episode_reward += float(reward)  # Accumulate episode reward
             replay_buffer.add(current_state, action, reward, obs, done)
@@ -100,12 +101,12 @@ def dqn(
                     )
                     targets = rewards + gamma * next_values_max * (1 - dones)
 
-                loss = F.smooth_l1_loss(current_q_values, targets)
+                loss = F.mse_loss(current_q_values, targets)
                 optimizer.zero_grad()
                 loss.backward()
-                clip_grad_norm_(main.parameters(), max_norm=1)
+                clip_grad_norm_(main.parameters(), max_norm=10)
                 optimizer.step()
-            epsilon = max(min_eps, epsilon - decay)
+            epsilon = max(min_eps, epsilon * decay)
 
         train_reward_logs.append(episode_reward)
 
