@@ -8,7 +8,7 @@ python src/main.py \
 	--capacity 10_000 \
 	--epsilon 1 \
 	--update_frequency 1000 \
-	--decay 0.001 \
+	--decay 0.99 \
 	--min_eps 0.01 \
 	--batch_size 32 \
 	--gamma 0.99 \
