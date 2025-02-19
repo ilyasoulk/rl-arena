@@ -1,6 +1,5 @@
 import torch
-import torch.nn.functional as F
-from utils import preprocess, FrameStack, eval
+from utils import FrameStack, eval
 
 
 def compute_returns(rewards, gamma, device="mps"):
@@ -12,11 +11,13 @@ def compute_returns(rewards, gamma, device="mps"):
         future_return = rewards[i] + gamma * future_return
         returns[i] = future_return
 
-    # TODO : Normalize returns
+    # Normalize
+    returns = (returns - returns.mean()) / (returns.std() + 1e-8)
     return returns
 
 
-# TODO : Use advantage instead of basic REINFORCE, or implement it on more advanced algorithms
+# This is the original vanilla who uses REINFORCE returns for the loss instead of advantages
+# TODO : Add variations of "weight" : Action-Value function (Q(a,s)) or Advantage (A(s, a) = Q(s, a) - V(s))
 def vpg(
     policy,
     env_name,
@@ -35,12 +36,13 @@ def vpg(
     train_reward_logs = []
     eval_reward_logs = []
     total_steps = 0
-    eval_freq = 1000
+    eval_freq = 10_000
     avg_eval_rewards = 0
 
     while total_steps < steps:
         current_state, _ = env.reset()
         current_state = frame_stack.reset(current_state)
+        print(current_state.shape)
         done = False
         truncated = False
         episode_reward = 0
@@ -62,17 +64,16 @@ def vpg(
                 eval_reward_logs.append(avg_eval_rewards)
                 if (
                     avg_eval_rewards > solved_threshold
-                ):  # This is the score at which we consider CartPole-v1 solved
-                    print(f"{env_name} has been solved, saving the Q-function...")
+                ):  # This is the score at which we consider env to be solved
+                    print(f"{env_name} has been solved, saving the policy...")
                     torch.save(
                         policy.state_dict(), output_dir + "/VPG-" + env_name + ".pth"
                     )
                     return train_reward_logs, eval_reward_logs
 
-            inputs = preprocess(current_state, mode=model_type).to(device)
-            inputs = frame_stack.update(inputs)
-            logits = policy(inputs)
+            logits = policy(current_state)
 
+            # Sampling from distribution is the equivalent of eps-greedy in DQN it allows for exploration/exploitation
             distribution = torch.distributions.Categorical(logits=logits)
             action = distribution.sample()
             logprob = distribution.log_prob(action)
@@ -80,7 +81,7 @@ def vpg(
             obs, reward, done, truncated, _ = env.step(action.item())
             episode_batch.append((logprob, reward))
             episode_reward += float(reward)
-            current_state = obs
+            current_state = frame_stack.update(obs)
 
         logprobs, rewards = list(zip(*episode_batch))
 
