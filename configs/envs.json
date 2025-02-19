@@ -2,7 +2,10 @@
   "CartPole-v1": {
     "model": "MLP",
     "observation_space": 4,
-    "action_space": 2
+    "action_space": 2,
+    "env_args": {
+      "render_mode": "human"
+    }
   },
   "CarRacing-v3": {
     "model": "ConvNet",

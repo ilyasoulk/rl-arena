@@ -39,10 +39,9 @@ class ConvNet(nn.Module):
         if len(x.shape) == 3:
             x = x.unsqueeze(dim=0)  # Add batch dim
 
-        if x.max() > 1:
-            x = x / 255.0
-
         x = x.permute(0, 3, 1, 2)  # B, C, H, W
+        # Add prints for debugging
+
         features = self.features(x)
         actions = self.head(features)
         return actions
