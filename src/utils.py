@@ -11,7 +11,7 @@ def eval(policy, num_episodes, env_name, env_config, num_frame_stack=1, device="
     print("Evaluating")
     eval_env = env_config.create_env(env_name)
     mode = env_config.get_model_type(env_name)
-    frame_stack = FrameStack(num_frame_stack, mode=mode)
+    frame_stack = FrameStack(num_frame_stack, mode=mode, device=device)
     rewards = []
     for _ in range(num_episodes):
         current_state, _ = eval_env.reset()

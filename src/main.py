@@ -81,6 +81,7 @@ if __name__ == "__main__":
             gamma=args.gamma,
             solved_threshold=args.solved_threshold,
             num_frame_stack=args.num_frame_stack,
+            device=device,
         )
 
     elif args.method == "VPG":

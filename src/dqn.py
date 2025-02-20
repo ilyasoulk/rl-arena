@@ -26,7 +26,7 @@ def dqn(
     env = env_config.create_env(env_name)
     model_type = env_config.get_model_type(env_name)
     replay_buffer = ReplayBuffer(capacity, mode=model_type)
-    frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type)
+    frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type, device=device)
     eval_freq = 20_000
     warm_up = 12_500
     total_steps = 0
@@ -53,6 +53,7 @@ def dqn(
                     env_name=env_name,
                     env_config=env_config,
                     num_frame_stack=num_frame_stack,
+                    device=device,
                 )
                 eval_reward_logs.append(avg_eval_rewards)
                 if (
