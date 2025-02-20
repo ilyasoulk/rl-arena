@@ -96,7 +96,7 @@ def dqn(
                     )
                     targets = rewards + gamma * next_values_max * (1 - dones)
 
-                loss = F.mse_loss(current_q_values, targets)
+                loss = F.smooth_l1_loss(current_q_values, targets)
                 optimizer.zero_grad()
                 loss.backward()
                 clip_grad_norm_(main.parameters(), max_norm=10)
