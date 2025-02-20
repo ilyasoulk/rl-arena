@@ -25,8 +25,8 @@ def dqn(
 ):
     env = env_config.create_env(env_name)
     model_type = env_config.get_model_type(env_name)
-    replay_buffer = ReplayBuffer(capacity, mode=model_type)
-    frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type, device=device)
+    replay_buffer = ReplayBuffer(capacity, mode=model_type, device=device)
+    frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type)
     eval_freq = 20_000
     warm_up = 12_500
     total_steps = 0
@@ -88,14 +88,8 @@ def dqn(
                     replay_buffer.sample(batch_size)
                 )
 
-                current_states = current_states.to(device)
-                actions = actions.to(device)
                 current_q_values = main(current_states).gather(1, actions)
                 with torch.no_grad():
-                    next_states = next_states.to(device)
-                    rewards = rewards.to(device)
-                    dones = dones.to(device)
-
                     next_values = target(next_states)
                     next_values_max = torch.max(next_values, dim=1).values.unsqueeze(
                         dim=1

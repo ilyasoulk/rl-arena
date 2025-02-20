@@ -11,7 +11,7 @@ def eval(policy, num_episodes, env_name, env_config, num_frame_stack=1, device="
     print("Evaluating")
     eval_env = env_config.create_env(env_name)
     mode = env_config.get_model_type(env_name)
-    frame_stack = FrameStack(num_frame_stack, mode=mode, device=device)
+    frame_stack = FrameStack(num_frame_stack, mode=mode)
     rewards = []
     for _ in range(num_episodes):
         current_state, _ = eval_env.reset()
@@ -21,14 +21,15 @@ def eval(policy, num_episodes, env_name, env_config, num_frame_stack=1, device="
         episode_reward = 0
         while not (done or truncated):
             # action = policy(inputs).argmax().item()
+            current_state = current_state.to(device)
             estimated_returns = policy(current_state)
             print(f"estimated_returns shape : {estimated_returns.shape}")
             print(f"estimated_returns : {estimated_returns}")
 
             action = estimated_returns.argmax()
             print(f"Chosen action : {action}")
-            obs, reward, done, truncated, _ = eval_env.step(action.item())
-            current_state = frame_stack.update(obs)
+            next_state, reward, done, truncated, _ = eval_env.step(action.item())
+            current_state = frame_stack.update(next_state)
             episode_reward += float(reward)  # Accumulate episode reward
 
         rewards.append(episode_reward)
@@ -63,33 +64,34 @@ def preprocess(state, mode):
 
 
 class ReplayBuffer:
-    def __init__(self, capacity, stack_size=4, mode="MLP"):
+    def __init__(self, capacity, stack_size=4, mode="MLP", device="mps"):
         self.buffer = deque(maxlen=capacity)
         self.stack_size = stack_size
+        self.device = device
         self.mode = mode
 
     def add(self, frame_stack, action, reward, next_frame_stack, done):
         """Stores the stacked frames instead of a single frame."""
-        if not isinstance(frame_stack, torch.Tensor):
-            frame_stack = preprocess(frame_stack, self.mode)
-        if not isinstance(next_frame_stack, torch.Tensor):
-            next_frame_stack = preprocess(next_frame_stack, self.mode)
-        action = torch.tensor(action)
-        reward = torch.tensor(reward, dtype=torch.float32)
-        reward = torch.clamp(reward, min=-1.0, max=1.0)
-        done = torch.tensor(1 if done else 0)
-
+        done = 1 if done else 0
         self.buffer.append((frame_stack, action, reward, next_frame_stack, done))
 
     def sample(self, batch_size):
         batch = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, dones = list(zip(*batch))
 
-        states = torch.stack(states)
-        actions = torch.stack(actions).unsqueeze(dim=1)
-        rewards = torch.stack(rewards).unsqueeze(dim=1)
-        next_states = torch.stack(next_states)
-        dones = torch.tensor(dones).unsqueeze(dim=1)
+        states = torch.stack(states).to(self.device)
+        actions = (
+            torch.stack([torch.tensor(action) for action in actions])
+            .unsqueeze(dim=1)
+            .to(self.device)
+        )
+        rewards = (
+            torch.stack([torch.tensor(reward) for reward in rewards])
+            .unsqueeze(dim=1)
+            .to(self.device)
+        )
+        next_states = torch.stack(next_states).to(self.device)
+        dones = torch.tensor(dones).unsqueeze(dim=1).to(self.device)
 
         return states, actions, rewards, next_states, dones
 
@@ -127,14 +129,13 @@ class EnvConfig:
 
 
 class FrameStack:
-    def __init__(self, stack_size, mode, device="mps"):
+    def __init__(self, stack_size, mode):
         self.stack_size = stack_size
         self.frames = deque(maxlen=stack_size)
         self.mode = mode
-        self.device = device
 
     def reset(self, state):
-        processed_state = preprocess(state, mode=self.mode).to(self.device)
+        processed_state = preprocess(state, mode=self.mode)
         for _ in range(self.stack_size):
             self.frames.append(processed_state.clone())
 
@@ -143,7 +144,7 @@ class FrameStack:
         return stacked
 
     def update(self, state):
-        processed_state = preprocess(state, mode=self.mode).to(self.device)
+        processed_state = preprocess(state, mode=self.mode)
         self.frames.append(processed_state.clone())
 
         stacked = torch.cat(list(self.frames), dim=-1)
