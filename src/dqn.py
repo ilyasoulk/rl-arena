@@ -27,8 +27,8 @@ def dqn(
     model_type = env_config.get_model_type(env_name)
     replay_buffer = ReplayBuffer(capacity, mode=model_type)
     frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type)
-    min_experiences = batch_size * 2
-    eval_freq = 5000
+    eval_freq = 20_000
+    warm_up = 12_500
     total_steps = 0
     train_reward_logs = []
     eval_reward_logs = []
@@ -82,7 +82,7 @@ def dqn(
             replay_buffer.add(current_state, action, reward, obs, done)
             current_state = obs
 
-            if len(replay_buffer) > min_experiences:
+            if len(replay_buffer) > warm_up:
                 current_states, actions, rewards, next_states, dones = (
                     replay_buffer.sample(batch_size)
                 )
@@ -106,7 +106,7 @@ def dqn(
                 loss.backward()
                 clip_grad_norm_(main.parameters(), max_norm=10)
                 optimizer.step()
-            epsilon = max(min_eps, epsilon * decay)
+                epsilon = max(min_eps, epsilon - decay)
 
         train_reward_logs.append(episode_reward)
 

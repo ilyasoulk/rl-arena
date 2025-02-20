@@ -57,7 +57,7 @@ if __name__ == "__main__":
     main = model_class(in_dim, args.hidden_dim, action_space).to(device)
     # optimizer = torch.optim.Adam(main.parameters(), lr=args.lr)
     optimizer = torch.optim.RMSprop(
-        main.parameters(), lr=args.lr, alpha=0.9, eps=1e-02, momentum=0.0
+        main.parameters(), lr=args.lr, alpha=0.95, eps=1e-02, momentum=0.0
     )
 
     print(args.method)

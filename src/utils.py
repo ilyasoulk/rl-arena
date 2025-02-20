@@ -76,6 +76,7 @@ class ReplayBuffer:
             next_frame_stack = preprocess(next_frame_stack, self.mode)
         action = torch.tensor(action)
         reward = torch.tensor(reward, dtype=torch.float32)
+        reward = torch.clamp(reward, min=-1.0, max=1.0)
         done = torch.tensor(1 if done else 0)
 
         self.buffer.append((frame_stack, action, reward, next_frame_stack, done))
