@@ -28,6 +28,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str)
     parser.add_argument("--solved_threshold", type=float)
     parser.add_argument("--num_frame_stack", type=int, default=1)
+    parser.add_argument("--use_critic", action="store_true")
 
     args = parser.parse_args()
 
@@ -57,12 +58,14 @@ if __name__ == "__main__":
     main = model_class(in_dim, args.hidden_dim, action_space).to(device)
     # optimizer = torch.optim.Adam(main.parameters(), lr=args.lr)
     optimizer = torch.optim.RMSprop(
-        main.parameters(), lr=args.lr, alpha=0.95, eps=1e-02, momentum=0.0
+        main.parameters(), lr=args.lr, alpha=0.9, eps=1e-02, momentum=0.0
     )
 
     print(args.method)
     if args.method == "DQN":
         target = model_class(in_dim, args.hidden_dim, action_space).to(device)
+        target.load_state_dict(main.state_dict())
+        target.eval()
 
         logs = dqn(
             target,
@@ -85,8 +88,15 @@ if __name__ == "__main__":
         )
 
     elif args.method == "VPG":
+        if args.use_critic:
+            # We use a State-Value function instead of an Action-Value function
+            critic = model_class(in_dim, args.hidden_dim, 1).to(device)
+        else:
+            critic = None
+
         vpg(
             main,
+            critic,
             args.env_name,
             env_config,
             args.steps,
