@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from torch.nn.utils import clip_grad_norm_
+from torch.nn.utils import clip_grad_norm_, clip_grad_value_
 from utils import ReplayBuffer, FrameStack, preprocess, eval, soft_update
 
 
@@ -27,8 +27,8 @@ def dqn(
     model_type = env_config.get_model_type(env_name)
     replay_buffer = ReplayBuffer(capacity, mode=model_type, device=device)
     frame_stack = FrameStack(stack_size=num_frame_stack, mode=model_type)
-    eval_freq = 20_000
-    warm_up = 12_500
+    eval_freq = 5000
+    warm_up = 1000
     total_steps = 0
     train_reward_logs = []
     eval_reward_logs = []
@@ -46,61 +46,63 @@ def dqn(
             if total_steps > steps:
                 break
 
-            if total_steps % eval_freq == 0:
-                avg_eval_rewards = eval(
-                    main,
-                    num_episodes=10,
-                    env_name=env_name,
-                    env_config=env_config,
-                    num_frame_stack=num_frame_stack,
-                    device=device,
-                )
-                eval_reward_logs.append(avg_eval_rewards)
-                if (
-                    avg_eval_rewards > solved_threshold
-                ):  # This is the score at which we consider CartPole-v1 solved
-                    print(f"{env_name} has been solved, saving the Q-function...")
-                    torch.save(
-                        main.state_dict(), output_dir + "/DQN-" + env_name + ".pth"
-                    )
-                    return train_reward_logs, eval_reward_logs
-
-            if total_steps % update_frequency == 0:
-                print("Target weights are being updated")
-                soft_update(target, main)
-
             if torch.rand(1).item() > epsilon:
-                inputs = preprocess(current_state, mode=model_type).to(device)
-                action = main(inputs).argmax().item()
+                current_state = current_state.to(device)
+                action = main(current_state).argmax().item()
 
             else:
                 action = env.action_space.sample()  # Take random action
 
             obs, reward, done, truncated, _ = env.step(action)
 
-            obs = frame_stack.update(obs)
+            next_state = frame_stack.update(obs)
             episode_reward += float(reward)  # Accumulate episode reward
-            replay_buffer.add(current_state, action, reward, obs, done)
-            current_state = obs
+            replay_buffer.add(current_state, action, reward, next_state, done)
+            current_state = next_state
 
             if len(replay_buffer) > warm_up:
+                if total_steps % eval_freq == 0:
+                    avg_eval_rewards = eval(
+                        main,
+                        num_episodes=1,
+                        env_name=env_name,
+                        env_config=env_config,
+                        num_frame_stack=num_frame_stack,
+                        device=device,
+                    )
+                    eval_reward_logs.append(avg_eval_rewards)
+                    if avg_eval_rewards > solved_threshold:
+                        print(f"{env_name} has been solved, saving the Q-function...")
+                        torch.save(
+                            main.state_dict(), output_dir + "/DQN-" + env_name + ".pth"
+                        )
+                        return train_reward_logs, eval_reward_logs
+
                 current_states, actions, rewards, next_states, dones = (
                     replay_buffer.sample(batch_size)
                 )
 
                 current_q_values = main(current_states).gather(1, actions)
+
                 with torch.no_grad():
-                    next_values = target(next_states)
-                    next_values_max = torch.max(next_values, dim=1).values.unsqueeze(
-                        dim=1
-                    )
-                    targets = rewards + gamma * next_values_max * (1 - dones)
+                    next_actions = main(next_states).argmax(dim=1, keepdim=True)
+                    next_values = target(next_states).gather(1, next_actions)
+                    targets = rewards + gamma * next_values * (1 - dones)
 
                 loss = F.smooth_l1_loss(current_q_values, targets)
                 optimizer.zero_grad()
                 loss.backward()
-                clip_grad_norm_(main.parameters(), max_norm=10)
                 optimizer.step()
+                torch.nn.utils.clip_grad_norm_(main.parameters(), max_norm=10)
+
+                if total_steps % update_frequency == 0:
+                    tau = 0.001
+                    for target_param, main_param in zip(
+                        target.parameters(), main.parameters()
+                    ):
+                        target_param.data.copy_(
+                            tau * main_param.data + (1.0 - tau) * target_param.data
+                        )
                 epsilon = max(min_eps, epsilon - decay)
 
         train_reward_logs.append(episode_reward)
