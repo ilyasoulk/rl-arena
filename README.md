@@ -14,6 +14,7 @@ A comprehensive implementation of reinforcement learning algorithms following Op
 - [x] Vanilla Policy Gradient (VPG)
   - Successfully tested on CartPole-v1 (solved in ~11k steps)
   - Direct policy optimization using REINFORCE
+  - Possibility to use Actor-Critic method (Advantages)
   - Return normalization for stability
   - Stochastic action sampling for exploration
   - Frame stacking support
