@@ -1,6 +1,8 @@
 import json
 import torch
 import random
+import numpy as np
+import cv2
 import gymnasium as gym
 from collections import deque
 import torch.nn.functional as F
@@ -20,47 +22,37 @@ def eval(policy, num_episodes, env_name, env_config, num_frame_stack=1, device="
         truncated = False
         episode_reward = 0
         while not (done or truncated):
-            # action = policy(inputs).argmax().item()
             current_state = current_state.to(device)
             estimated_returns = policy(current_state)
-            print(f"estimated_returns shape : {estimated_returns.shape}")
-            print(f"estimated_returns : {estimated_returns}")
-
             action = estimated_returns.argmax()
-            print(f"Chosen action : {action}")
             next_state, reward, done, truncated, _ = eval_env.step(action.item())
             current_state = frame_stack.update(next_state)
-            episode_reward += float(reward)  # Accumulate episode reward
+            episode_reward += float(reward)
 
         rewards.append(episode_reward)
 
     eval_env.close()
-
     avg_reward = sum(rewards) / num_episodes
     return avg_reward
 
 
 def preprocess(state, mode):
-    state = torch.tensor(state)
     if mode == "ConvNet":
-        if len(state.shape) == 2:  # If no channel dim
-            state = state.unsqueeze(-1)
+        # Convert RGB to grayscale
+        gray = cv2.cvtColor(state, cv2.COLOR_RGB2GRAY)
 
-            # Convert to torch and resize
-        state = (
-            F.interpolate(
-                state.float().permute(2, 0, 1).unsqueeze(0),
-                size=(84, 84),
-                mode="bilinear",
-                align_corners=False,
-            )
-            .squeeze(0)
-            .permute(1, 2, 0)
-        )
+        # Resize to 84x84
+        resized = cv2.resize(gray, (84, 84), interpolation=cv2.INTER_AREA)
 
-        state = state / 255.0
+        # Normalize to [0, 1]
+        normalized = resized / 255.0
 
-    return state
+        # Convert to tensor and add channel dimension
+        state_tensor = torch.FloatTensor(normalized).unsqueeze(-1)
+
+        return state_tensor
+    else:
+        return torch.FloatTensor(state)
 
 
 class ReplayBuffer:
@@ -71,7 +63,6 @@ class ReplayBuffer:
         self.mode = mode
 
     def add(self, frame_stack, action, reward, next_frame_stack, done):
-        """Stores the stacked frames instead of a single frame."""
         done = 1 if done else 0
         self.buffer.append((frame_stack, action, reward, next_frame_stack, done))
 
@@ -79,7 +70,14 @@ class ReplayBuffer:
         batch = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, dones = list(zip(*batch))
 
-        states = torch.stack(states).to(self.device)
+        states = torch.stack(
+            [
+                torch.FloatTensor(s, device=self.device)
+                if isinstance(s, np.ndarray)
+                else s.to(self.device)
+                for s in states
+            ]
+        ).to(self.device)
         actions = (
             torch.stack([torch.tensor(action) for action in actions])
             .unsqueeze(dim=1)
@@ -90,7 +88,14 @@ class ReplayBuffer:
             .unsqueeze(dim=1)
             .to(self.device)
         )
-        next_states = torch.stack(next_states).to(self.device)
+        next_states = torch.stack(
+            [
+                torch.FloatTensor(s, device=self.device)
+                if isinstance(s, np.ndarray)
+                else s.to(self.device)
+                for s in next_states
+            ]
+        ).to(self.device)
         dones = torch.tensor(dones).unsqueeze(dim=1).to(self.device)
 
         return states, actions, rewards, next_states, dones
@@ -140,7 +145,6 @@ class FrameStack:
             self.frames.append(processed_state.clone())
 
         stacked = torch.cat(list(self.frames), dim=-1)
-
         return stacked
 
     def update(self, state):
@@ -150,21 +154,28 @@ class FrameStack:
         stacked = torch.cat(list(self.frames), dim=-1)
         return stacked
 
-    def visualize_frames(self):
-        """Visualize all frames in the stack using matplotlib."""
+    def visualize_frames(self, tensor=None):
         import matplotlib.pyplot as plt
 
-        num_frames = len(self.frames)
+        if tensor is None:
+            frames = self.frames
+        else:
+            # Handle tensor from replay buffer
+            # Assuming tensor shape is [B, C, H, W] or [B, H, W, C]
+            if len(tensor.shape) == 4:
+                tensor = tensor[0]  # Take first batch
+            # Split the stacked frames back into individual frames
+            frames = torch.chunk(tensor, self.stack_size, dim=-1)
+
+        num_frames = len(frames)
         fig, axes = plt.subplots(1, num_frames, figsize=(3 * num_frames, 3))
 
-        # Handle case where there's only one frame
         if num_frames == 1:
             axes = [axes]
 
-        for i, frame in enumerate(self.frames):
-            # Move tensor to CPU and convert to numpy array
+        for i, frame in enumerate(frames):
             frame_np = frame.cpu().squeeze().numpy()
-            axes[i].imshow(frame_np, cmap="gray" if frame_np.ndim == 2 else None)
+            axes[i].imshow(frame_np, cmap="gray")
             axes[i].axis("off")
             axes[i].set_title(f"Frame {i+1}")
 
@@ -173,10 +184,6 @@ class FrameStack:
 
 
 def soft_update(target_network, policy_network, tau=0.005):
-    """
-    Soft update of target network parameters
-    θ_target = τ*θ_policy + (1 - τ)*θ_target
-    """
     for target_param, policy_param in zip(
         target_network.parameters(), policy_network.parameters()
     ):
