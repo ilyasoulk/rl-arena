@@ -16,32 +16,26 @@ class MLP(nn.Module):
 
 
 class ConvNet(nn.Module):
-    def __init__(self, in_channels, hidden_dim, action_space):
+    def __init__(self, in_channels, hidden_dim, num_actions):
+        self.in_channels = in_channels
         super().__init__()
-
-        self.features = nn.Sequential(
-            nn.Conv2d(in_channels, 32, kernel_size=8, stride=4),  # Output: 20x20x32
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),  # Output: 9x9x64
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),  # Output: 7x7x64
-            nn.ReLU(),
-            nn.Flatten(),  # Output: 3136 (7*7*64)
-            nn.Linear(3136, hidden_dim),
-            nn.ReLU(),
-        )
-
-        self.head = nn.Linear(
-            hidden_dim, action_space
-        )  # Output: action_space (Q-values)
+        self.conv1 = nn.Conv2d(in_channels, 32, 8, stride=4)
+        self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
+        self.conv3 = nn.Conv2d(64, 64, 3, stride=1)
+        self.fc1 = nn.Linear(64 * 7 * 7, hidden_dim)
+        self.fc2 = nn.Linear(512, num_actions)
 
     def forward(self, x):
         if len(x.shape) == 3:
             x = x.unsqueeze(dim=0)  # Add batch dim
 
-        x = x.permute(0, 3, 1, 2)  # B, C, H, W
-        # Add prints for debugging
+        if x.size(1) != self.in_channels:
+            x = x.permute(0, 3, 1, 2)  # B, C, H, W
 
-        features = self.features(x)
-        actions = self.head(features)
-        return actions
+        # Add prints for debugging
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.reshape(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        return self.fc2(x)
