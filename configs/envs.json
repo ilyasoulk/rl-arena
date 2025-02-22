@@ -2,10 +2,7 @@
   "CartPole-v1": {
     "model": "MLP",
     "observation_space": 4,
-    "action_space": 2,
-    "env_args": {
-      "render_mode": "human"
-    }
+    "action_space": 2
   },
   "CarRacing-v3": {
     "model": "ConvNet",
@@ -33,12 +30,17 @@
   "ALE/Pong-v5": {
     "model": "ConvNet",
     "env_args": {
-      "obs_type": "grayscale",
-      "frameskip": 4,
-      "repeat_action_probability": 0.0,
-      "full_action_space": false
+      "frameskip": 8
     },
     "observation_space": [84, 84, 1],
     "action_space": 6
+  },
+  "ALE/Breakout-v5" : {
+    "model": "ConvNet",
+    "env_args": {
+      "frameskip": 4
+    },
+    "observation_space": [84, 84, 1],
+    "action_space": 4
   }
 }
