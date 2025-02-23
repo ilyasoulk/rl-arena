@@ -37,7 +37,7 @@ def vpg(
     train_reward_logs = []
     eval_reward_logs = []
     total_steps = 0
-    eval_freq = 1_000
+    eval_freq = 20_000
     avg_eval_rewards = 0
 
     # Init Critic's optimizer
@@ -82,7 +82,7 @@ def vpg(
             if critic:
                 value = critic(current_state)
             else:
-                value = 0
+                value = torch.tensor(0)
 
             # Sampling from distribution is the equivalent of eps-greedy in DQN it allows for exploration/exploitation
             distribution = torch.distributions.Categorical(logits=logits)
@@ -115,7 +115,7 @@ def vpg(
             print(f"[{total_steps} steps] State-Value Loss : {critic_loss}")
 
         print(
-            f"[{total_steps} steps] Loss : {loss.item()} | Episode Reward : {episode_reward} | Avg Eval Reward : {avg_eval_rewards}"
+            f"[{total_steps} steps] Loss : {-loss.item()} | Episode Reward : {episode_reward} | Avg Eval Reward : {avg_eval_rewards}"
         )
 
     return train_reward_logs, eval_reward_logs
