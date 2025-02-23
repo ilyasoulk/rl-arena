@@ -2,7 +2,7 @@
 
 python src/main.py \
 	--method DQN \
-	--env_name ALE/Pong-v5 \
+	--env_name ALE/Breakout-v5 \
 	--hidden_dim 512 \
 	--steps 12_500_000 \
 	--capacity 1_000_000 \

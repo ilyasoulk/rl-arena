@@ -10,4 +10,5 @@ python src/main.py \
 	--gamma 0.99 \
 	--lr 0.001 \
 	--output_dir models \
-	--solved_threshold 475
+	--solved_threshold 475 \
+	--use_critic

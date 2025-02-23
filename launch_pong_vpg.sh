@@ -11,4 +11,5 @@ python src/main.py \
 	--lr 0.001 \
 	--output_dir models \
 	--solved_threshold 18 \
-	--num_frame_stack 4
+	--num_frame_stack 4 \
+	--use_critic
