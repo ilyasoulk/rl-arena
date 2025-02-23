@@ -5,6 +5,7 @@ import argparse
 import gymnasium as gym
 from dqn import dqn
 from vpg import vpg
+from trpo import trpo
 from utils import EnvConfig
 
 if __name__ == "__main__":
@@ -96,6 +97,25 @@ if __name__ == "__main__":
 
         vpg(
             main,
+            critic,
+            args.env_name,
+            env_config,
+            args.steps,
+            args.gamma,
+            optimizer,
+            args.num_frame_stack,
+            args.solved_threshold,
+            args.output_dir,
+            device,
+        )
+
+    elif args.method == "TRPO":
+        old_policy = model_class(in_dim, args.hidden_dim, action_space).to(device)
+        old_policy.load_state_dict(main.state_dict())
+        critic = model_class(in_dim, args.hidden_dim, 1).to(device)
+        trpo(
+            main,
+            old_policy,
             critic,
             args.env_name,
             env_config,
