@@ -1,6 +1,7 @@
 import torch
 from utils import FrameStack, eval
 from vpg import compute_returns
+import torch.nn.functional as F
 
 
 def update_policy(policy, natural_gradient, alpha):
@@ -12,13 +13,15 @@ def compute_fim(policy, new_distributions, old_distributions, v):
     kl = torch.distributions.kl_divergence(new_distributions, old_distributions).mean()
 
     grads = torch.autograd.grad(
-        kl, policy.parameters(), create_graph=True
+        kl, policy.parameters(), create_graph=True, retain_graph=True
     )  # create graph allows us to compute higher order gradients
     grads = torch.cat([grad.view(-1) for grad in grads])  # Flatten
 
     grad_v_prod = (grads * v).sum()
 
-    second_grads = torch.autograd.grad(grad_v_prod, policy.parameters())
+    second_grads = torch.autograd.grad(
+        grad_v_prod, policy.parameters(), retain_graph=True
+    )
     fisher_v_prod = torch.cat([grad.contiguous().view(-1) for grad in second_grads])
 
     return fisher_v_prod
@@ -32,7 +35,7 @@ def conjugate_gradient(
     p = v.clone()
 
     for _ in range(n):
-        f = compute_fim(policy, new_distributions, old_distributions, v)
+        f = compute_fim(policy, new_distributions, old_distributions, p)
         alpha = torch.dot(r, r) / torch.dot(p, f)
 
         x += alpha * p
@@ -62,7 +65,7 @@ def compute_surrogate(policy, observations, actions, advantages, old_logprobs):
 
     logprobs = dist.log_prob(actions)
     ratio = torch.exp(logprobs - old_logprobs)
-    return ratio * advantages, dist
+    return torch.mean(ratio * advantages), dist
 
 
 def line_search(
@@ -85,15 +88,15 @@ def line_search(
         new_surrogate, dist = compute_surrogate(
             policy, observations, actions, advantages, old_logprobs
         )
-        kl = torch.distributions.kl_divergence(dist, old_dist)
+        kl = torch.distributions.kl_divergence(dist, old_dist).mean()
 
         if new_surrogate > old_surrogate and kl <= max_kl:
-            return True, alpha
+            return new_surrogate
 
         # If not acceptable, restore original parameters
         set_params(policy, original_params)
 
-    return False, 0.0
+    return old_surrogate
 
 
 def trpo(
@@ -116,13 +119,14 @@ def trpo(
     train_reward_logs = []
     eval_reward_logs = []
     total_steps = 0
-    eval_freq = 10_000
+    eval_freq = 2_000
     avg_eval_rewards = 0
+
+    critic_opt = torch.optim.Adam(critic.parameters(), lr=1e-3)
 
     while total_steps < steps:
         current_state, _ = env.reset()
         current_state = frame_stack.reset(current_state)
-        print(current_state.shape)
         done = False
         truncated = False
         episode_reward = 0
@@ -194,6 +198,7 @@ def trpo(
         returns = compute_returns(rewards, gamma=gamma, device=device)
         values = torch.stack(values)
         advantage = returns - values
+        advantage = (advantage - advantage.mean()) / (advantage.std())
         old_logprobs = torch.stack(old_logprobs)
         new_logprobs = torch.stack(new_logprobs)
 
@@ -215,12 +220,17 @@ def trpo(
         policy_grad = torch.cat([param.grad.view(-1) for param in policy.parameters()])
         optimizer.zero_grad()
 
+        critic_loss = F.mse_loss(values.squeeze(), returns)
+        critic_opt.zero_grad()
+        critic_loss.backward()
+        critic_opt.step()
+
         natural_gradient = conjugate_gradient(
             policy, new_distribution, old_distribution, policy_grad
         )
 
         actions = torch.stack(actions)
-        line_search(
+        new_surrogate = line_search(
             policy,
             observations,
             actions,
@@ -231,12 +241,10 @@ def trpo(
             natural_gradient,
         )
 
-        # if found:
-        #     print(f"Updating the policy with alpha : {alpha}")
-        #     update_policy(policy, natural_gradient, alpha)
+        update_status = new_surrogate > loss
 
-        # print(
-        #     f"[{total_steps} steps] Loss : {loss.item()} | Episode Reward : {episode_reward} | Avg Eval Reward : {avg_eval_rewards}"
-        # )
+        print(
+            f"[{total_steps} steps] Line search status : {update_status} | Loss : {loss.item()} | Episode Reward : {episode_reward} | Avg Eval Reward : {avg_eval_rewards} | New surrogate : {new_surrogate}"
+        )
 
     return train_reward_logs, eval_reward_logs
