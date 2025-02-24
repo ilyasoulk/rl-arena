@@ -60,63 +60,11 @@ python src/main.py \
 ./launch_cartpole_vpg.sh
 ```
 
-Or manually with custom parameters:
-
-```bash
-python src/main.py \
-    --method VPG \
-    --env_name CartPole-v1 \
-    --hidden_dim 128 \
-    --steps 50000 \
-    --gamma 0.99 \
-    --lr 0.001 \
-    --num_frame_stack 1 \
-    --solved_threshold 475 \
-    --output_dir models
-```
 
 ### TRPO on CartPole
 
 ```bash
-python src/main.py \
-    --method TRPO \
-    --env_name CartPole-v1 \
-    --hidden_dim 128 \
-    --steps 50000 \
-    --gamma 0.99 \
-    --lr 0.001 \
-    --num_frame_stack 1 \
-    --solved_threshold 475 \
-    --output_dir models
-```
-
-## 📁 Project Structure
-
-```
-Directory structure:
-└── ilyasoulk-rl-arena/
-    ├── README.md
-    ├── LICENSE
-    ├── launch_carracing_dqn.sh
-    ├── launch_cartpole_dqn.sh
-    ├── launch_cartpole_vpg.sh
-    ├── launch_lunarlander_dqn.sh
-    ├── launch_pong_dqn.sh
-    ├── pyproject.toml
-    ├── uv.lock
-    ├── configs/
-    │   └── envs.json
-    ├── models/
-    │   ├── DQN-CartPole-v1.pth
-    │   ├── DQN-LunarLander-v3.pth
-    │   └── VPG-CartPole-v1.pth
-    └── src/
-        ├── dqn.py
-        ├── main.py
-        ├── models.py
-        ├── trpo.py
-        ├── utils.py
-        └── vpg.py
+./launch_cartpole_trpo.sh
 ```
 
 ## 🔧 Technical Details
