@@ -9,7 +9,7 @@ def update_policy(policy, natural_gradient, alpha):
 
 
 def compute_fim(policy, new_distributions, old_distributions, v):
-    kl = torch.distributions.kl_divergence(new_distributions, old_distributions)
+    kl = torch.distributions.kl_divergence(new_distributions, old_distributions).mean()
 
     grads = torch.autograd.grad(
         kl, policy.parameters(), create_graph=True
@@ -210,14 +210,13 @@ def trpo(
             ratio * advantage
         ).mean()  # We don't multiply by -1 because this is only useful when updating the parameters
         optimizer.zero_grad()
-        loss.backward()
+        loss.backward(retain_graph=True)
 
-        # 1st step is to get policy gradient
-        policy_grad = torch.cat([param.grad for param in policy.parameters()])
+        policy_grad = torch.cat([param.grad.view(-1) for param in policy.parameters()])
         optimizer.zero_grad()
 
         natural_gradient = conjugate_gradient(
-            policy, new_distributions, old_distributions, policy_grad
+            policy, new_distribution, old_distribution, policy_grad
         )
 
         actions = torch.stack(actions)
@@ -228,7 +227,7 @@ def trpo(
             advantage,
             loss,
             old_logprobs,
-            old_distributions,
+            old_distribution,
             natural_gradient,
         )
 
