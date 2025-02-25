@@ -6,6 +6,7 @@ import gymnasium as gym
 from dqn import dqn
 from vpg import vpg
 from trpo import trpo
+from ppo import ppo
 from utils import EnvConfig
 
 if __name__ == "__main__":
@@ -59,7 +60,7 @@ if __name__ == "__main__":
     main = model_class(in_dim, args.hidden_dim, action_space).to(device)
     # optimizer = torch.optim.Adam(main.parameters(), lr=args.lr)
     optimizer = torch.optim.RMSprop(
-        main.parameters(), lr=args.lr, alpha=0.9, eps=1e-02, momentum=0.0
+        main.parameters(), lr=args.lr, alpha=0.9, eps=0.01, momentum=0.0
     )
 
     print(args.method)
@@ -76,9 +77,7 @@ if __name__ == "__main__":
             env_name=args.env_name,
             steps=args.steps,
             capacity=args.capacity,
-            epsilon=args.epsilon,
-            update_frequency=args.update_frequency,
-            decay=args.decay,
+            epsilon_start=args.epsilon,
             min_eps=args.min_eps,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
@@ -117,6 +116,26 @@ if __name__ == "__main__":
             main,
             old_policy,
             critic,
+            args.env_name,
+            env_config,
+            args.steps,
+            args.gamma,
+            optimizer,
+            args.num_frame_stack,
+            args.solved_threshold,
+            args.output_dir,
+            device,
+        )
+
+    elif args.method == "PPO":
+        old_policy = model_class(in_dim, args.hidden_dim, action_space).to(device)
+        old_policy.load_state_dict(main.state_dict())
+        critic = model_class(in_dim, args.hidden_dim, 1).to(device)
+        ppo(
+            main,
+            old_policy,
+            critic,
+            args.epsilon,
             args.env_name,
             env_config,
             args.steps,
