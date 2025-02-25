@@ -99,7 +99,7 @@ def vpg(
         returns = compute_returns(rewards, gamma=gamma, device=device)
         values = torch.stack(values).squeeze()
         advantages = (
-            returns - values
+            returns - values.detach()
         )  # If there is no critic values = 0 so we use basic REINFORCE
         logprobs = torch.stack(logprobs)
         loss = -(logprobs * advantages).mean()
