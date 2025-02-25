@@ -196,7 +196,7 @@ def trpo(
         returns = compute_returns(rewards, gamma=gamma, device=device)
         values = torch.stack(values)
         advantage = (
-            returns - values.detach()
+            returns - values.squeeze().detach()
         )  # Avoids computing gradients for the value function
         advantage = (advantage - advantage.mean()) / (advantage.std())
         logprobs = torch.stack(logprobs)
