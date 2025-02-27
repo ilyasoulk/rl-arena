@@ -8,11 +8,11 @@ Planning to implement the following algorithms from OpenAI's Spinning Up (and mo
 - [x] Deep-Q-Network (DQN)
 - [x] Vanilla Policy Gradient (VPG)
 - [x] Trust Region Policy Optimization (TRPO)
-- [ ] Proximal Policy Optimization (PPO)
+- [x] Proximal Policy Optimization (PPO)
+- [ ] Group Relative Policy Optimization (GRPO)
 - [ ] Deep Deterministic Policy Gradient (DDPG)
 - [ ] Twin Delayed DDPG (TD3)
 - [ ] Soft Actor-Critic (SAC)
-- [ ] Group Relative Policy Optimization (GRPO)
 
 ## 🛠️ Installation
 
@@ -94,6 +94,12 @@ python src/main.py \
 - Advantage normalization for training stability
 - Separate networks for policy and value function
 
+### PPO Implementation Features
+- Clipped surrogate objective to constrain policy updates
+- Multiple epochs of minibatch updates for sample efficiency
+- Entropy bonus for exploration
+- Advantage normalization for training stability
+
 ## 📈 Performance Comparisons
 
 | Algorithm | Environment  | Steps to Solve |
@@ -101,11 +107,13 @@ python src/main.py \
 | DQN       | CartPole-v1 | ~18,000       |
 | VPG       | CartPole-v1 | ~11,000       |
 | TRPO      | CartPole-v1 | ~5,000        |
+| PPO       | CartPole-v1 | ~7,000        |
 ## 📚 References
 
 - [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/pdf/1312.5602)
 - [Policy Gradient Methods for Reinforcement Learning with Function Approximation](https://papers.nips.cc/paper/1999/file/464d828b85b0bed98e80ade0a5c43b0f-Paper.pdf)
 - [Trust Region Policy Optimization](https://arxiv.org/abs/1502.05477)
+- [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347)
 - [OpenAI Spinning Up](https://spinningup.openai.com/)
 - [Gymnasium (formerly Gym)](https://gymnasium.farama.org/)
 
