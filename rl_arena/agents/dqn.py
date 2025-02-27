@@ -2,7 +2,7 @@ from math import inf
 import torch
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
-from rl_arena.utils import ReplayBuffer, soft_update
+from rl_arena.utils import ReplayBuffer
 from rl_arena.agents.base_agent import RLAgent
 
 
@@ -17,7 +17,6 @@ class DQNAgent(RLAgent):
         decay=0.0001,
         min_eps=0.01,
         batch_size=32,
-        tau=0.001,
         **kwargs,
     ):
         super().__init__(policy=policy, **kwargs)
@@ -28,7 +27,6 @@ class DQNAgent(RLAgent):
         self.decay = decay
         self.min_eps = min_eps
         self.batch_size = batch_size
-        self.tau = tau
 
         self.replay_buffer = ReplayBuffer(
             capacity, mode=self.model_type, device=self.device
