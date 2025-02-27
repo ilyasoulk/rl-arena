@@ -1,5 +1,6 @@
-from math import inf
+import random
 import torch
+from math import inf
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from rl_arena.utils import ReplayBuffer
@@ -27,7 +28,11 @@ class DQNAgent(RLAgent):
         self.decay = decay
         self.min_eps = min_eps
         self.batch_size = batch_size
-
+        last_layer = list(policy.modules())[-1]
+        if hasattr(last_layer, "out_features"):
+            self.action_space = last_layer.out_features
+        elif hasattr(last_layer, "out_channels"):
+            self.action_space = last_layer.out_channels
         self.replay_buffer = ReplayBuffer(
             capacity, mode=self.model_type, device=self.device
         )
@@ -38,9 +43,7 @@ class DQNAgent(RLAgent):
             with torch.no_grad():
                 action = self.policy(state).argmax().item()
         else:
-            env = self.create_env()
-            action = env.action_space.sample()
-            env.close()
+            action = random.randint(0, self.action_space - 1)
 
         return action, ()
 
