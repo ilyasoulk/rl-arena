@@ -9,10 +9,9 @@ class PPOAgent(RLAgent):
         policy,
         old_policy,
         critic,
-        clip_param=0.2,
+        clip_param=0.1,
         ppo_epochs=10,
-        mini_batch_size=64,
-        value_coef=0.5,
+        mini_batch_size=32,
         entropy_coef=0.01,
         **kwargs,
     ):
@@ -22,9 +21,8 @@ class PPOAgent(RLAgent):
         self.clip_param = clip_param
         self.ppo_epochs = ppo_epochs
         self.mini_batch_size = mini_batch_size
-        self.value_coef = value_coef
         self.entropy_coef = entropy_coef
-        self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=3e-3)
+        self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=1e-3)
 
     def select_action(self, state):
         logits = self.policy(state)
@@ -49,22 +47,23 @@ class PPOAgent(RLAgent):
         return returns
 
     def update(self, batch):
-        observations, logprobs, logits, rewards, values, actions = zip(
+        observations, logprobs, logits, values, actions, rewards = zip(
             *[(item[0], item[1], item[2], item[3], item[4], item[5]) for item in batch]
         )
 
         returns = self.compute_returns(rewards)
         values = torch.stack(values).squeeze()
-        advantages = returns - values.detach()
+        advantages = returns - values.detach()  # Detach values to avoid graph issues
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         observations = torch.stack(observations)
         actions = torch.stack(actions)
-        old_logprobs = torch.stack(logprobs)
+        old_logprobs = torch.stack(logprobs).detach()
+
+        value_loss = 0
+        policy_loss = 0
 
         self.old_policy.load_state_dict(self.policy.state_dict())
-        policy_loss = torch.tensor(torch.inf)
-        value_loss = torch.tensor(torch.inf)
 
         for _ in range(self.ppo_epochs):
             batch_size = len(observations)
@@ -79,9 +78,8 @@ class PPOAgent(RLAgent):
                 mb_advantages = advantages[idx]
                 mb_returns = returns[idx]
 
+                # Policy update
                 logits = self.policy(mb_obs)
-                new_values = self.critic(mb_obs)
-
                 dist = torch.distributions.Categorical(logits=logits)
                 new_logprobs = dist.log_prob(mb_actions)
                 entropy = dist.entropy().mean()
@@ -93,22 +91,26 @@ class PPOAgent(RLAgent):
                     * mb_advantages
                 )
 
-                policy_loss = -torch.min(surr1, surr2).mean()
-                value_loss = F.mse_loss(new_values.squeeze(), mb_returns)
-
-                loss = (
-                    policy_loss
-                    + self.value_coef * value_loss
-                    - self.entropy_coef * entropy
+                policy_loss = (
+                    -torch.min(surr1, surr2).mean() - self.entropy_coef * entropy
                 )
 
                 self.optimizer.zero_grad()
-                self.critic_opt.zero_grad()
-                loss.backward()
+                policy_loss.backward()  # Remove retain_graph=True
                 self.optimizer.step()
+
+                # Critic update (separate backward pass)
+                new_values = self.critic(mb_obs)
+                value_loss = F.mse_loss(new_values.squeeze(), mb_returns)
+
+                self.critic_opt.zero_grad()
+                value_loss.backward()
                 self.critic_opt.step()
 
-        return policy_loss.item(), value_loss.item()
+                value_loss = value_loss.item()
+                policy_loss = policy_loss.item()
+
+        return policy_loss, value_loss
 
     def train(self):
         while self.total_steps < self.steps:
@@ -120,7 +122,7 @@ class PPOAgent(RLAgent):
             self.train_reward_logs.append(episode_reward)
 
             print(
-                f"[{self.total_steps} steps] Policy Loss: {policy_loss:.5f} | "
+                f"[{self.total_steps} steps] Policy Loss: {-policy_loss:.5f} | "
                 f"Value Loss: {value_loss:.5f} | "
                 f"Episode Reward: {episode_reward:.2f} | "
                 f"Avg Eval Reward: {self.avg_eval_rewards:.2f}"

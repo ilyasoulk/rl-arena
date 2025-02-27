@@ -1,6 +1,6 @@
 #!/bin/sh
 
-python src/main.py \
+python rl_arena/main.py \
 	--env_name CartPole-v1 \
 	--method PPO \
 	--hidden_dim 128 \
