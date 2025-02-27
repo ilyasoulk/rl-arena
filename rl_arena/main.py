@@ -85,12 +85,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Load environment configuration
     env_config = EnvConfig("configs/envs.json")
     action_space, observation_space = env_config.get_spaces(args.env_name)
     print(f"Action space: {action_space}\nObservation space: {observation_space}")
 
-    # Determine device
     device = (
         "cuda"
         if torch.cuda.is_available()
@@ -99,34 +97,23 @@ if __name__ == "__main__":
         else "cpu"
     )
     print(f"Using device: {device}")
-
-    # Create model based on environment type
     model_type = env_config.get_model_type(args.env_name)
     model_class = getattr(models, model_type)
 
-    # Determine input dimension based on model type and frame stacking
     if model_type == "ConvNet":
         in_dim = observation_space[-1] * args.num_frame_stack
     else:
         in_dim = observation_space
 
-    # Create policy network
     policy = model_class(in_dim, args.hidden_dim, action_space).to(device)
 
-    # Create optimizer
-    if args.method == "DQN":
-        optimizer = torch.optim.Adam(policy.parameters(), lr=args.lr)
-    else:
-        optimizer = torch.optim.Adam(policy.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(policy.parameters(), lr=args.lr)
 
-    # Create and train agent based on method
     if args.method == "DQN":
-        # Create target network for DQN
         target = model_class(in_dim, args.hidden_dim, action_space).to(device)
         target.load_state_dict(policy.state_dict())
         target.eval()
 
-        # Create DQN agent
         agent = DQNAgent(
             policy=policy,
             target=target,
@@ -153,7 +140,6 @@ if __name__ == "__main__":
         if args.use_critic:
             critic = model_class(in_dim, args.hidden_dim, 1).to(device)
 
-        # Create VPG agent
         agent = VPGAgent(
             policy=policy,
             critic=critic,
@@ -169,7 +155,6 @@ if __name__ == "__main__":
         )
 
     elif args.method == "TRPO":
-        # Create old policy and critic networks
         old_policy = model_class(in_dim, args.hidden_dim, action_space).to(device)
         old_policy.load_state_dict(policy.state_dict())
         critic = model_class(in_dim, args.hidden_dim, 1).to(device)
@@ -192,13 +177,12 @@ if __name__ == "__main__":
             cg_iters=args.cg_iters,
         )
 
-    elif args.method == "PPO":
-        # Create old policy and critic networks
+    # elif args.method == "PPO":
+    else:
         old_policy = model_class(in_dim, args.hidden_dim, action_space).to(device)
         old_policy.load_state_dict(policy.state_dict())
         critic = model_class(in_dim, args.hidden_dim, 1).to(device)
 
-        # Create PPO agent
         agent = PPOAgent(
             policy=policy,
             old_policy=old_policy,
@@ -217,11 +201,9 @@ if __name__ == "__main__":
             mini_batch_size=args.mini_batch_size,
         )
 
-    # Train the agent
     print(f"Starting training with {args.method} on {args.env_name}...")
     train_logs, eval_logs = agent.train()
     print(f"Training completed. Final evaluation reward: {eval_logs[-1]:.2f}")
 
-    # Save final model
     agent.save_model()
     print(f"Model saved to {args.output_dir}/{args.method}-{args.env_name}.pth")
