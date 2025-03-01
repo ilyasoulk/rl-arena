@@ -177,7 +177,7 @@ class TRPOAgent(RLAgent):
 
             print(
                 f"[{self.total_steps} steps] Policy Loss: {policy_loss:.5f} | Critic Loss: {critic_loss:.5f} | "
-                f"Episode Reward: {episode_reward:.2f} | "
+                f"Episode Reward: {self.train_reward_logs[-1]:.2f} | "
                 f"Avg Eval Reward: {self.avg_eval_rewards:.2f}"
             )
 
