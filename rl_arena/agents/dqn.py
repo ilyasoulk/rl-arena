@@ -47,7 +47,7 @@ class DQNAgent(RLAgent):
 
         return action, ()
 
-    def update(self, batch=None):
+    def update(self, batch=None, episode_lengths=None):
         if len(self.replay_buffer) <= self.warm_up:
             return 0.0, 0.0
 

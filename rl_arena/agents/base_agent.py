@@ -69,7 +69,7 @@ class RLAgent(ABC):
         pass
 
     @abstractmethod
-    def update(self, batch) -> Tuple[float, float]:
+    def update(self, batch, episode_lengths) -> Tuple[float, float]:
         pass
 
     def collect_episode(self):
