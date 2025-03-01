@@ -76,12 +76,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ppo_epochs", type=int, default=10, help="Number of PPO epochs per update"
     )
-    parser.add_argument(
-        "--mini_batch_size",
-        type=int,
-        default=64,
-        help="Mini-batch size for PPO updates",
-    )
 
     args = parser.parse_args()
 
@@ -198,7 +192,7 @@ if __name__ == "__main__":
             device=device,
             clip_param=args.epsilon,
             ppo_epochs=args.ppo_epochs,
-            mini_batch_size=args.mini_batch_size,
+            mini_batch_size=args.batch_size,
         )
 
     print(f"Starting training with {args.method} on {args.env_name}...")
