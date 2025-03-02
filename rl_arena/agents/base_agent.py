@@ -69,7 +69,7 @@ class RLAgent(ABC):
         pass
 
     @abstractmethod
-    def update(self, batch, episode_lengths) -> Tuple[float, float]:
+    def update(self, batch) -> Tuple[float, float]:
         pass
 
     def collect_episode(self):
@@ -95,7 +95,7 @@ class RLAgent(ABC):
             action, log_data = self.select_action(current_state)
 
             obs, reward, done, truncated, _ = env.step(action)
-            episode_batch.append((current_state, *log_data, reward))
+            episode_batch.append((current_state, *log_data, done, reward))
             episode_reward += float(reward)
             current_state = self.frame_stack.update(obs)
 

@@ -36,7 +36,7 @@ class VPGAgent(RLAgent):
         returns = (returns - returns.mean()) / (returns.std() + 1e-8)
         return returns
 
-    def update(self, batch, episode_lengths=None):
+    def update(self, batch):
         logprobs, rewards, values = list(
             zip(*[(item[1], item[-1], item[3]) for item in batch])
         )

@@ -131,7 +131,7 @@ class TRPOAgent(RLAgent):
         self.old_policy.load_state_dict(self.policy.state_dict())
         return old_surrogate, False
 
-    def update(self, batch, episode_lengths=None):
+    def update(self, batch):
         observations, logprobs, logits, values, actions, rewards = zip(
             *[(item[0], item[1], item[2], item[3], item[4], item[5]) for item in batch]
         )

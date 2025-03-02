@@ -36,51 +36,31 @@ class PPOAgent(RLAgent):
 
         return action.item(), (logprob, logits, value, action)
 
-    def trim_dataset(self, dataset, episode_lengths):
-        dataset = dataset[: self.target_steps]  # Trim to target_steps
-        # Trim episode_lengths if dataset was truncated
-        total_len = 0
-        trimmed_lengths = []
-        for length in episode_lengths:
-            if total_len + length <= self.target_steps:
-                trimmed_lengths.append(length)
-                total_len += length
-            else:
-                trimmed_lengths.append(self.target_steps - total_len)
-                break
-        episode_lengths = trimmed_lengths
-
-        return dataset, episode_lengths
-
-    def compute_returns(self, rewards, episode_lengths):
+    def compute_returns(self, rewards, dones):
         rewards = torch.tensor(rewards, device=self.device)
         T = len(rewards)
         returns = torch.zeros(T, device=self.device)
         future_return = 0
 
-        end_indices = []
-        start = 0
-        for length in episode_lengths:
-            end = start + length - 1
-            end_indices.append(end)
-            start += length
-
         for t in reversed(range(T)):
             future_return = rewards[t] + self.gamma * future_return
             returns[t] = future_return
             # Reset future_return if this is the last step of an episode
-            if t in end_indices:
+            if dones[t]:
                 future_return = 0
 
         returns = (returns - returns.mean()) / (returns.std() + 1e-8)
         return returns
 
-    def update(self, batch, episode_lengths):
-        observations, _, logits, values, actions, rewards = zip(
-            *[(item[0], item[1], item[2], item[3], item[4], item[5]) for item in batch]
+    def update(self, batch):
+        observations, _, logits, values, actions, dones, rewards = zip(
+            *[
+                (item[0], item[1], item[2], item[3], item[4], item[5], item[6])
+                for item in batch
+            ]
         )
 
-        returns = self.compute_returns(rewards, episode_lengths)
+        returns = self.compute_returns(rewards, dones)
         values = torch.stack(values).squeeze()
         advantages = returns - values.detach()  # Detach values to avoid graph issues
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
@@ -145,7 +125,6 @@ class PPOAgent(RLAgent):
         print(self.steps)
         while self.total_steps < self.steps:
             dataset = []
-            episode_lengths = []
             collected_steps = 0
             while collected_steps < self.target_steps:
                 episode_batch, episode_reward, solved = self.collect_episode()
@@ -153,17 +132,10 @@ class PPOAgent(RLAgent):
                     return self.train_reward_logs, self.eval_reward_logs
 
                 collected_steps += len(episode_batch)
-                episode_lengths.append(len(episode_batch))
                 dataset.extend(episode_batch)
                 self.train_reward_logs.append(episode_reward)
 
-            trimmed_dataset, trimmed_episode_lengths = self.trim_dataset(
-                dataset, episode_lengths
-            )
-
-            policy_loss, value_loss = self.update(
-                trimmed_dataset, trimmed_episode_lengths
-            )
+            policy_loss, value_loss = self.update(dataset)
 
             print(
                 f"[{self.total_steps} steps] Policy Loss: {-policy_loss:.5f} | "
