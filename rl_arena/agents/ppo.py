@@ -122,7 +122,6 @@ class PPOAgent(RLAgent):
         return policy_loss.item(), value_loss.item()
 
     def train(self):
-        print(self.steps)
         while self.total_steps < self.steps:
             dataset = []
             collected_steps = 0
