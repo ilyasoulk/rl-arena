@@ -72,6 +72,23 @@ class RLAgent(ABC):
     def update(self, batch) -> Tuple[float, float]:
         pass
 
+    def compute_returns(self, rewards, dones):
+        rewards = torch.tensor(rewards, device=self.device)
+        T = len(rewards)
+        returns = torch.zeros(T, device=self.device)
+        future_return = 0
+
+        for t in reversed(range(T)):
+            if dones[t]:
+                future_return = 0
+
+            future_return = rewards[t] + self.gamma * future_return
+            returns[t] = future_return
+            # Reset future_return if this is the last step of an episode
+
+        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+        return returns
+
     def collect_episode(self):
         env = self.create_env()
         current_state, _ = env.reset()

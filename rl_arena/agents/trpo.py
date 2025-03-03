@@ -12,6 +12,7 @@ class TRPOAgent(RLAgent):
         max_kl=0.01,
         cg_iters=10,
         cg_damping=1e-3,
+        target_steps=256,
         **kwargs,
     ):
         super().__init__(policy=policy, **kwargs)
@@ -20,6 +21,7 @@ class TRPOAgent(RLAgent):
         self.max_kl = max_kl
         self.cg_iters = cg_iters
         self.cg_damping = cg_damping
+        self.target_steps = target_steps
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=3e-3)
 
     def select_action(self, state):
@@ -31,18 +33,6 @@ class TRPOAgent(RLAgent):
         logprob = distribution.log_prob(action)
 
         return action.item(), (logprob, logits, value, action)
-
-    def compute_returns(self, rewards):
-        T = len(rewards)
-        returns = torch.zeros(T, device=self.device)
-        future_return = 0
-
-        for i in reversed(range(T)):
-            future_return = rewards[i] + self.gamma * future_return
-            returns[i] = future_return
-
-        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
-        return returns
 
     def compute_fim(self, distributions, v):
         ref_logits = distributions.logits.detach()
@@ -132,11 +122,14 @@ class TRPOAgent(RLAgent):
         return old_surrogate, False
 
     def update(self, batch):
-        observations, logprobs, logits, values, actions, rewards = zip(
-            *[(item[0], item[1], item[2], item[3], item[4], item[5]) for item in batch]
+        observations, logprobs, logits, values, actions, dones, rewards = zip(
+            *[
+                (item[0], item[1], item[2], item[3], item[4], item[5], item[6])
+                for item in batch
+            ]
         )
 
-        returns = self.compute_returns(rewards)
+        returns = self.compute_returns(rewards, dones)
         values = torch.stack(values).squeeze()
         advantages = returns - values.detach()
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
@@ -168,12 +161,19 @@ class TRPOAgent(RLAgent):
 
     def train(self):
         while self.total_steps < self.steps:
-            episode_batch, episode_reward, solved = self.collect_episode()
-            if solved:
-                return self.train_reward_logs, self.eval_reward_logs
+            dataset = []
+            collected_steps = 0
 
-            policy_loss, critic_loss = self.update(episode_batch)
-            self.train_reward_logs.append(episode_reward)
+            while collected_steps < self.target_steps:
+                episode_batch, episode_reward, solved = self.collect_episode()
+                if solved:
+                    return self.train_reward_logs, self.eval_reward_logs
+
+                collected_steps += len(episode_batch)
+                dataset.extend(episode_batch)
+                self.train_reward_logs.append(episode_reward)
+
+            policy_loss, critic_loss = self.update(dataset)
 
             print(
                 f"[{self.total_steps} steps] Policy Loss: {policy_loss:.5f} | Critic Loss: {critic_loss:.5f} | "

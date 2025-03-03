@@ -36,22 +36,6 @@ class PPOAgent(RLAgent):
 
         return action.item(), (logprob, logits, value, action)
 
-    def compute_returns(self, rewards, dones):
-        rewards = torch.tensor(rewards, device=self.device)
-        T = len(rewards)
-        returns = torch.zeros(T, device=self.device)
-        future_return = 0
-
-        for t in reversed(range(T)):
-            future_return = rewards[t] + self.gamma * future_return
-            returns[t] = future_return
-            # Reset future_return if this is the last step of an episode
-            if dones[t]:
-                future_return = 0
-
-        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
-        return returns
-
     def update(self, batch):
         observations, _, logits, values, actions, dones, rewards = zip(
             *[
