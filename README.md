@@ -107,7 +107,7 @@ python src/main.py \
 | DQN       | CartPole-v1 | ~18,000       |
 | VPG       | CartPole-v1 | ~11,000       |
 | TRPO      | CartPole-v1 | ~5,000        |
-| PPO       | CartPole-v1 | ~7,000        |
+| PPO       | CartPole-v1 | ~4,000        |
 ## 📚 References
 
 - [Playing Atari with Deep Reinforcement Learning](https://arxiv.org/pdf/1312.5602)
