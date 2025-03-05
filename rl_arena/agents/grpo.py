@@ -1,5 +1,5 @@
 import torch
-import torch.nn.functional as F
+import numpy as np
 from rl_arena.agents.base_agent import RLAgent
 
 
@@ -24,8 +24,7 @@ class GRPOAgent(RLAgent):
         self.entropy_coef = entropy_coef
         self.target_steps = target_steps
         self.group_size = group_size
-        # TODO : Define reward env
-        # self.reward_env =
+        self.reward_env = self.create_env()
 
     def select_action(self, state):
         logits = self.policy(state)
@@ -37,8 +36,18 @@ class GRPOAgent(RLAgent):
         return action.item(), (logprob, logits, action)
 
     def reward_function(self, obs, action):
-        # TODO : Complete the reward function using the reward env
-        pass
+        original_state = self.reward_env.unwrapped.state.copy()
+        original_steps = self.reward_env.unwrapped._elapsed_steps
+
+        self.reward_env.unwrapped.state = np.array(obs, dtype=np.float32)
+        self.reward_env.unwrapped._elapsed_steps = 0
+
+        _, reward, _, _, _ = self.reward_env.step(action)
+
+        self.reward_env.unwrapped.state = original_state
+        self.reward_env.unwrapped._elapsed_steps = original_steps
+
+        return reward
 
     def update(self, batch):
         observations, _, logits, actions, dones, rewards = zip(
