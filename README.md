@@ -10,9 +10,6 @@ Planning to implement the following algorithms from OpenAI's Spinning Up (and mo
 - [x] Trust Region Policy Optimization (TRPO)
 - [x] Proximal Policy Optimization (PPO)
 - [ ] Group Relative Policy Optimization (GRPO)
-- [ ] Deep Deterministic Policy Gradient (DDPG)
-- [ ] Twin Delayed DDPG (TD3)
-- [ ] Soft Actor-Critic (SAC)
 
 ## 🛠️ Installation
 
